@@ -76,70 +76,7 @@ const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
 
-const INBOX_FILE = path.join(__dirname, 'data', 'inbox.json');
-
-async function saveInboxNumber(number, name) {
-    try {
-        const cleanNumber = String(number).replace(/[^0-9]/g, '');
-        
-        // LID අංක (අංක 15ට වඩා දිග ඒවා) අයින් කරනවා
-        if (cleanNumber.length > 14 || cleanNumber.length < 9) {
-            console.log(`⏭️ Skipping invalid number: ${cleanNumber}`);
-            return;
-        }
-        
-        // අංකය ලස්සනට + එක්ක හදනවා
-        const formattedNumber = `+${cleanNumber}`;
-        
-        let inbox = [];
-        if (await fs.pathExists(INBOX_FILE)) {
-            inbox = await fs.readJson(INBOX_FILE);
-        }
-        
-        const exists = inbox.find(i => i.number === formattedNumber);
-        if (!exists) {
-            inbox.push({ number: formattedNumber, name, date: new Date().toISOString() });
-            await fs.ensureDir(path.dirname(INBOX_FILE));
-            await fs.writeJson(INBOX_FILE, inbox, { spaces: 2 });
-            console.log('📥 New inbox number saved:', formattedNumber);
-        }
-    } catch (e) {
-        console.error('Error saving inbox:', e);
-    }
-}
-async function saveInboxNumber(number, name) {
-    try {
-        // අංක වලට අදාළ නැති අකුරු තිබුණොත් අයින් කරනවා
-        const cleanNumber = String(number).replace(/[^0-9]/g, '');
-        
-        // ඇත්ත phone number එකක දිග සාමාන්‍යයෙන් අංක 10ත් 14ත් අතර වෙනවා. 
-        // ඒකට වඩා දිග නම් (උදා: 15) ඒවා LID අංක නිසා අයින් කරනවා.
-        if (cleanNumber.length < 10 || cleanNumber.length > 14) {
-            console.log(`⏭️ Skipping invalid/LID number: ${cleanNumber}`);
-            return;
-        }
-
-        // අංකය ලස්සනට පෙන්නන්න ඉස්සරහින් + දානවා (උදා: +94765947564)
-        const formattedNumber = `+${cleanNumber}`;
-        
-        let inbox = [];
-        if (await fs.pathExists(INBOX_FILE)) {
-            inbox = await fs.readJson(INBOX_FILE);
-        }
-        
-        // කලින් save කරලා තියෙනවද බලනවා
-        const exists = inbox.find(i => i.number === formattedNumber);
-        if (!exists) {
-            inbox.push({ number: formattedNumber, name, date: new Date().toISOString() });
-            await fs.ensureDir(path.dirname(INBOX_FILE));
-            await fs.writeJson(INBOX_FILE, inbox, { spaces: 2 });
-            console.log('📥 New inbox number saved:', formattedNumber);
-        }
-    } catch (e) {
-        console.error('Error saving inbox:', e);
-    }
-}
-
+// 👇 Fake Quote Object එක 👇
 const adhimini = { 
     key: { 
         remoteJid: "status@broadcast", 
@@ -149,12 +86,11 @@ const adhimini = {
     }, 
     message: { 
         contactMessage: { 
-            displayName: '@Shiro MD✨', 
+            displayName: '@𝙰𝙽𝙶𝙻𝙴 𝙼𝙸𝙽𝙸✨', 
             vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
         } 
     } 
 };
-
 
 function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
@@ -380,199 +316,170 @@ async function Pair(number, res = null) {
             }
         });
 
-        sock.ev.on('messages.upsert', async (mek) => {
+        sock.ev.on('messages.upsert', async (event) => {
             try {
-                mek = mek.messages[0];
-                if (!mek.message) return;
+                if (event.type !== 'notify') return;
+                
+                for (const mek of event.messages) {
+                    if (!mek.message) continue;
+                    if (mek.key && mek.key.remoteJid === 'status@broadcast') continue;
+                    if (mek.key.fromMe) continue;
 
-                mek.message = (getContentType(mek.message) === 'ephemeralMessage')
-                    ? mek.message.ephemeralMessage.message
-                    : mek.message;
+                    mek.message = (getContentType(mek.message) === 'ephemeralMessage')
+                        ? mek.message.ephemeralMessage.message
+                        : mek.message;
 
-                if (mek.key && mek.key.remoteJid === 'status@broadcast') {
-                    if (config.AUTO_READ_STATUS) {
-                        await sock.readMessages([mek.key]);
-                    }
-                    if (config.AUTO_REACT) {
-                        await sock.sendMessage(mek.key.remoteJid, {
-                            react: { text: '❤️', key: mek.key }
-                        });
-                    }
-                    return;
-                }
+                    const m = sms(sock, mek);
+                    const type = getContentType(mek.message);
+                    const from = mek.key.remoteJid;
 
-                const m = sms(sock, mek);
-                const type = getContentType(mek.message);
-                const from = mek.key.remoteJid;
+                    const body =
+                        type === 'conversation' ? mek.message.conversation :
+                        type === 'extendedTextMessage' ? mek.message.extendedTextMessage.text :
+                        type === 'imageMessage' && mek.message.imageMessage?.caption ? mek.message.imageMessage.caption :
+                        type === 'videoMessage' && mek.message.videoMessage?.caption ? mek.message.videoMessage.caption :
+                        type === 'interactiveResponseMessage' ? (() => {
+                            try { return JSON.parse(mek.message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson)?.id || ''; }
+                            catch { return ''; }
+                        })() :
+                        type === 'templateButtonReplyMessage' ? mek.message.templateButtonReplyMessage?.selectedId :
+                        m.msg?.text || m.msg?.conversation || m.msg?.caption || '';
 
-                const body =
-                    type === 'conversation' ? mek.message.conversation :
-                    type === 'extendedTextMessage' ? mek.message.extendedTextMessage.text :
-                    type === 'imageMessage' && mek.message.imageMessage?.caption ? mek.message.imageMessage.caption :
-                    type === 'videoMessage' && mek.message.videoMessage?.caption ? mek.message.videoMessage.caption :
-                    type === 'interactiveResponseMessage' ? (() => {
-                        try { return JSON.parse(mek.message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson)?.id || ''; }
-                        catch { return ''; }
-                    })() :
-                    type === 'templateButtonReplyMessage' ? mek.message.templateButtonReplyMessage?.selectedId :
-                    m.msg?.text || m.msg?.conversation || m.msg?.caption || '';
-
-                const prefix = config.PREFIX;
-                const isCmd = body.startsWith(prefix);
-                const command = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : '';
-                const args = body.trim().split(/ +/).slice(1);
-                const q = args.join(' ');
-                const isGroup = from.endsWith('@g.us');
-                const sender = mek.key.fromMe
-                    ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
-                    : (mek.key.participant || mek.key.remoteJid);
-                const senderNumber = sender.split('@')[0];
-                const botNumber = sock.user.id.split(':')[0];
-                const botNumber2 = await jidNormalizedUser(sock.user.id);
-                const pushname = mek.pushName || 'User';
-                const isMe = botNumber.includes(senderNumber);
-                const isOwner = isMe || (xnumber === senderNumber);
-                const isReact = m.message?.reactionMessage ? true : false;
-
-                // 👇 Inbox එකට එන මැසේජ් save කරන කොටස 👇
-                                // 👇 Inbox එකට එන මැසේජ් save කරන කොටස 👇
-                if (!isGroup && !isMe) {
-                    let realNumber = '';
+                    const prefix = config.PREFIX;
+                    const isCmd = body.startsWith(prefix);
+                    const command = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : '';
+                    const args = body.trim().split(/ +/).slice(1);
+                    const q = args.join(' ');
                     
-                    // 1. අලුත් Baileys වල එන ඇත්ත Phone Number එක (senderPn)
-                    if (mek.key.senderPn) {
-                        realNumber = mek.key.senderPn.split('@')[0];
-                    } 
-                    // 2. ඒක නැත්නම් සාමාන්‍ය JID එකෙන් (remoteJid)
-                    else if (sender.endsWith('@s.whatsapp.net')) {
-                        realNumber = sender.split('@')[0];
-                    }
-                    
-                    // 3. අපිට අංකයක් හම්බුනා නම් විතරක් save කරන්න
-                    if (realNumber) {
-                        console.log("📥 Attempting to save DM from:", realNumber, "| Name:", pushname);
-                        saveInboxNumber(realNumber, pushname);
-                    } else {
-                        console.log("⚠️ Could not find real phone number. Raw JID:", sender);
-                    }
-                }
+                    const isGroup = from.endsWith('@g.us');
+                    const sender = mek.key.fromMe
+                        ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
+                        : (mek.key.participant || mek.key.remoteJid);
+                    const senderNumber = sender.split('@')[0];
+                    const botNumber = sock.user.id.split(':')[0];
+                    const botNumber2 = await jidNormalizedUser(sock.user.id);
+                    const pushname = mek.pushName || 'User';
+                    const isMe = botNumber.includes(senderNumber);
+                    const isOwner = isMe || (xnumber === senderNumber);
 
-                const quoted = type === 'extendedTextMessage' &&
-                    mek.message.extendedTextMessage.contextInfo != null
-                    ? mek.message.extendedTextMessage.contextInfo.quotedMessage || []
-                    : [];
+                    let groupMetadata = null;
+                    let groupName = '';
+                    let participants = [];
+                    let groupAdmins = [];
+                    let isBotAdmins = false;
+                    let isAdmins = false;
 
-                const groupMetadata = isGroup ? await sock.groupMetadata(from).catch(() => null) : null;
-                const groupName = isGroup && groupMetadata ? groupMetadata.subject : '';
-                const participants = isGroup && groupMetadata ? groupMetadata.participants : [];
-                const groupAdmins = isGroup ? getGroupAdmins(participants) : [];
-                const isBotAdmins = isGroup ? groupAdmins.includes(botNumber2) : false;
-                const isAdmins = isGroup ? groupAdmins.includes(sender) : false;
-                const isSudo = false;
-                const isPre = false;
-
-                // 👇 මෙතන තමයි reply function එක වෙනස් කළේ 👇
-                const reply = async (teks) =>
-                    await sock.sendMessage(from, { text: teks }, { quoted: adhimini }); // 'mek' වෙනුවට 'adhimini' දැම්මා
-                // 👆 -------------------------------------- 👆
-
-                if (isCmd) await sock.readMessages([mek.key]);
-
-                if (config.AUTO_REACT && !isMe && !isReact && Math.random() < 0.3) {
-                    const emojis = config.REACT_EMOJIS;
-                    sock.sendMessage(from, {
-                        react: {
-                            text: emojis[Math.floor(Math.random() * emojis.length)],
-                            key: mek.key
-                        }
-                    }).catch(() => {});
-                }
-
-                if (config.AUTO_TYPING) {
-                    sock.sendPresenceUpdate('composing', from).catch(() => {});
-                    setTimeout(() => sock.sendPresenceUpdate('paused', from).catch(() => {}), 3000);
-                }
-
-                const cmdName = isCmd ? body.slice(prefix.length).trim().split(' ')[0].toLowerCase() : false;
-
-                if (isCmd) {
-                    const cmd = commandMap.get(cmdName);
-                    if (cmd) {
-                        if (cmd.react) sock.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
+                    if (isGroup) {
                         try {
-                            // මෙතනට await දැම්මා async errors අහුවෙන්න
-                            await cmd.function(sock, mek, m, {
-                                from, prefix, isSudo, quoted, body, isCmd, isPre,
-                                command, args, q, isGroup, sender, senderNumber,
-                                botNumber2, botNumber, pushname, isMe, isOwner,
-                                groupMetadata, groupName, participants,
-                                groupAdmins, isBotAdmins, isAdmins, reply
-                            });
-                        } catch (e) {
-                            console.error('[PLUGIN ERROR]', e);
+                            groupMetadata = await sock.groupMetadata(from);
+                            groupName = groupMetadata.subject || '';
+                            participants = groupMetadata.participants || [];
+                            groupAdmins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin').map(p => p.id);
+                            
+                            const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                            isBotAdmins = groupAdmins.includes(botId) || groupAdmins.includes(botNumber2);
+                            isAdmins = groupAdmins.includes(sender);
+                        } catch (err) {
+                            console.log("Group Metadata Error:", err.message);
                         }
                     }
-                }
 
-                for (const cmd of events.commands) {
-                    try {
-                        if (body && cmd.on === 'body') {
-                            await cmd.function(sock, mek, m, {
-                                from, prefix, quoted, body, isSudo, isCmd,
-                                command, args, q, isPre, isGroup, sender, senderNumber,
-                                botNumber2, botNumber, pushname, isMe, isOwner,
-                                groupMetadata, groupName, participants,
-                                groupAdmins, isBotAdmins, isAdmins, reply
-                            });
-                        } else if (mek.q && cmd.on === 'text') {
-                            await cmd.function(sock, mek, m, {
-                                from, quoted, body, isSudo, isCmd, isPre,
-                                command, args, q, isGroup, sender, senderNumber,
-                                botNumber2, botNumber, pushname, isMe, isOwner,
-                                groupMetadata, groupName, participants,
-                                groupAdmins, isBotAdmins, isAdmins, reply
-                            });
-                        } else if ((cmd.on === 'image' || cmd.on === 'photo') && mek.type === 'imageMessage') {
-                            await cmd.function(sock, mek, m, {
-                                from, prefix, quoted, isSudo, body, isCmd,
-                                command, isPre, args, q, isGroup, sender, senderNumber,
-                                botNumber2, botNumber, pushname, isMe, isOwner,
-                                groupMetadata, groupName, participants,
-                                groupAdmins, isBotAdmins, isAdmins, reply
-                            });
-                        } else if (cmd.on === 'sticker' && mek.type === 'stickerMessage') {
-                            await cmd.function(sock, mek, m, {
-                                from, prefix, quoted, isSudo, body, isCmd,
-                                command, args, isPre, q, isGroup, sender, senderNumber,
-                                botNumber2, botNumber, pushname, isMe, isOwner,
-                                groupMetadata, groupName, participants,
-                                groupAdmins, isBotAdmins, isAdmins, reply
-                            });
+                    // 👇 SHH AUTO DELETE LOGIC 👇
+                    if (isGroup && !isMe && isBotAdmins && global.shhList && global.shhList[from]) {
+                        try {
+                            const shhTargets = global.shhList[from];
+                            if (Array.isArray(shhTargets) && (shhTargets.includes('ALL') || shhTargets.includes(sender))) {
+                                await sock.sendMessage(from, { delete: mek.key });
+                                continue; 
+                            }
+                        } catch (err) {
+                            console.log("Shh delete error:", err.message);
                         }
-                    } catch (e) {
-                        console.error('[CMD MAP ERROR]', e);
                     }
-                }
+                    // 👆 --------------------- 👆
 
-                switch (command) {
-                    case 'jid':
-                        reply(from);
-                        break;
-                    case 'ev': {
-                        if (isOwner) {
+                    const reply = async (teks) =>
+                        await sock.sendMessage(from, { text: teks }, { quoted: adhimini });
+
+                    if (isCmd) {
+                        await sock.readMessages([mek.key]);
+
+                        const cmd = commandMap.get(command);
+                        if (cmd) {
+                            if (cmd.react) sock.sendMessage(from, { react: { text: cmd.react, key: mek.key } }).catch(() => {});
                             try {
-                                let result = await eval(q);
-                                reply(util.format(result));
-                            } catch (err) {
-                                reply(util.format(err));
+                                await cmd.function(sock, mek, m, {
+                                    from, prefix, quoted: [], body, isCmd, command, args, q,
+                                    isGroup, sender, senderNumber, botNumber2, botNumber,
+                                    pushname, isMe, isOwner, groupMetadata, groupName,
+                                    participants, groupAdmins, isBotAdmins, isAdmins, reply
+                                });
+                            } catch (e) {
+                                console.error('[PLUGIN ERROR]', e);
                             }
                         }
-                        break;
                     }
-                    default:
-                        break;
-                }
 
+                    for (const cmd of events.commands) {
+                        try {
+                            if (body && cmd.on === 'body') {
+                                await cmd.function(sock, mek, m, {
+                                    from, prefix, quoted: [], body, isSudo: false, isCmd,
+                                    command, args, q, isPre: false, isGroup, sender, senderNumber,
+                                    botNumber2, botNumber, pushname, isMe, isOwner,
+                                    groupMetadata, groupName, participants,
+                                    groupAdmins, isBotAdmins, isAdmins, reply
+                                });
+                            } else if (mek.q && cmd.on === 'text') {
+                                await cmd.function(sock, mek, m, {
+                                    from, quoted: [], body, isSudo: false, isCmd, isPre: false,
+                                    command, args, q, isGroup, sender, senderNumber,
+                                    botNumber2, botNumber, pushname, isMe, isOwner,
+                                    groupMetadata, groupName, participants,
+                                    groupAdmins, isBotAdmins, isAdmins, reply
+                                });
+                            } else if ((cmd.on === 'image' || cmd.on === 'photo') && mek.type === 'imageMessage') {
+                                await cmd.function(sock, mek, m, {
+                                    from, prefix, quoted: [], isSudo: false, body, isCmd,
+                                    command, isPre: false, args, q, isGroup, sender, senderNumber,
+                                    botNumber2, botNumber, pushname, isMe, isOwner,
+                                    groupMetadata, groupName, participants,
+                                    groupAdmins, isBotAdmins, isAdmins, reply
+                                });
+                            } else if (cmd.on === 'sticker' && mek.type === 'stickerMessage') {
+                                await cmd.function(sock, mek, m, {
+                                    from, prefix, quoted: [], isSudo: false, body, isCmd,
+                                    command, args, isPre: false, q, isGroup, sender, senderNumber,
+                                    botNumber2, botNumber, pushname, isMe, isOwner,
+                                    groupMetadata, groupName, participants,
+                                    groupAdmins, isBotAdmins, isAdmins, reply
+                                });
+                            }
+                        } catch (e) {
+                            console.error('[CMD MAP ERROR]', e);
+                        }
+                    }
+
+                    switch (command) {
+                        case 'jid':
+                            reply(from);
+                            break;
+                        case 'ev': {
+                            if (isOwner) {
+                                try {
+                                    let result = await eval(q);
+                                    reply(util.format(result));
+                                } catch (err) {
+                                    reply(util.format(err));
+                                }
+                            }
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+
+                } // 👈 for loop එක වහන තැන
             } catch (e) {
                 console.error('[MESSAGE ERROR]', String(e));
             }
