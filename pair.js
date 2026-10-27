@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { createHumanEntropyService } = require('baileys-antiban');
+const { createHumanEntropyService, wrapSocket } = require('baileys-antiban');
 const express = require('express');
 const fs = require('fs-extra');
 const path = require('path');
@@ -178,12 +178,10 @@ async function Pair(number, res = null) {
         const { version } = await fetchLatestBaileysVersion();
         const logger = pino({ level: 'silent' });
 
-        const { wrapSocket, Browsers } = require('baileys-antiban');
-        
         const sock = wrapSocket(makeWASocket({
             version,
             logger,
-            browser: Browsers.macOS('Chrome'), // 👈 Linked Devices එකේ පෙන්නන්නේ "Chrome" කියලා
+            browser: ["Ubuntu", "Chrome", "110.0.5481.77"], // 👈 සරලව Array එකක් විදියට දාන්න
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
