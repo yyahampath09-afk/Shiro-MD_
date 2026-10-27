@@ -1,0 +1,32 @@
+name: WhatsApp Bot
+
+on:
+  workflow_dispatch: 
+  schedule:
+    - cron: '0 */5 * * *' 
+
+concurrency:
+  group: whatsapp-bot
+  cancel-in-progress: true 
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350 
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Bot
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: node pair.js
