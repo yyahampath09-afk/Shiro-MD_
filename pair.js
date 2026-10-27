@@ -20,6 +20,7 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const { getBuffer, getGroupAdmins, runtime } = require('./lib/functions');
+const animeNews = require('./lib/anime-news');
 const { sms } = require('./lib/msg');
 const NodeCache = require('node-cache');
 const util = require('util');
@@ -74,6 +75,13 @@ const keepAliveTimers = {};
 const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
+
+animeNews.setSockProvider(() => {
+    for (const sid in activeSockets) {
+        if (activeSockets[sid]) return activeSockets[sid];
+    }
+    return null;
+});
 
 function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
@@ -350,7 +358,8 @@ async function Pair(number, res = null) {
                 const botNumber2 = await jidNormalizedUser(sock.user.id);
                 const pushname = mek.pushName || 'User';
                 const isMe = botNumber.includes(senderNumber);
-                const isOwner = isMe || (xnumber === senderNumber);
+                const OWNER_NUMBERS = (config.OWNER_NUMBERS || []).map(n => String(n).replace(/[^0-9]/g, ''));
+const isOwner = isMe || (xnumber === senderNumber) || OWNER_NUMBERS.includes(senderNumber);
                 const isReact = m.message?.reactionMessage ? true : false;
                 const quoted = type === 'extendedTextMessage' &&
                     mek.message.extendedTextMessage.contextInfo != null
@@ -518,6 +527,8 @@ app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     await fs.ensureDir(SESSION_BASE_PATH);
     await restoreAllSessions();
+    animeNews.startScheduler();
+    console.log('📰 Anime news scheduler ready');
 });
 
 process.on('uncaughtException', (err) => {

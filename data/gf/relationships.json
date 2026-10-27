@@ -1,0 +1,28 @@
+[
+  {
+    "phone": "6271289786544",
+    "gfName": "kurumi",
+    "level": 1,
+    "xp": 3,
+    "mood": "neutral",
+    "moodUpdatedAt": "2026-10-27T03:56:47.564Z",
+    "chatCount": 3,
+    "memories": [],
+    "chatHistory": [],
+    "lastChatAt": "2026-10-27T04:00:28.674Z",
+    "createdAt": "2026-10-27T03:56:47.564Z"
+  },
+  {
+    "phone": "6271289786544",
+    "gfName": "taiga",
+    "level": 1,
+    "xp": 2,
+    "mood": "neutral",
+    "moodUpdatedAt": "2026-10-27T03:57:05.529Z",
+    "chatCount": 2,
+    "memories": [],
+    "chatHistory": [],
+    "lastChatAt": "2026-10-27T03:57:37.090Z",
+    "createdAt": "2026-10-27T03:57:05.529Z"
+  }
+]
