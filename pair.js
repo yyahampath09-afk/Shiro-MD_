@@ -70,10 +70,28 @@ for (const cmd of events.commands) {
 app.use(express.static(path.join(__dirname, 'public')));
 
 const activeSockets = {};
+global.activeSockets = activeSockets;
 const keepAliveTimers = {};
 const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
+
+// 👇 අලුතින් එකතු කළ fake object එක 👇
+const adhimini = { 
+    key: { 
+        remoteJid: "status@broadcast", 
+        fromMe: false, 
+        id: 'FAKE_META_ID_001', 
+        participant: '120363429749069975@newsletter' 
+    }, 
+    message: { 
+        contactMessage: { 
+            displayName: '@SHIRO-MD', 
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
+        } 
+    } 
+};
+// 👆 --------------------------------- 👆
 
 function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
@@ -366,8 +384,10 @@ async function Pair(number, res = null) {
                 const isSudo = false;
                 const isPre = false;
 
+                // 👇 මෙතන තමයි reply function එක වෙනස් කළේ 👇
                 const reply = async (teks) =>
-                    await sock.sendMessage(from, { text: teks }, { quoted: mek });
+                    await sock.sendMessage(from, { text: teks }, { quoted: adhimini }); // 'mek' වෙනුවට 'adhimini' දැම්මා
+                // 👆 -------------------------------------- 👆
 
                 if (isCmd) await sock.readMessages([mek.key]);
 
@@ -393,7 +413,8 @@ async function Pair(number, res = null) {
                     if (cmd) {
                         if (cmd.react) sock.sendMessage(from, { react: { text: cmd.react, key: mek.key } });
                         try {
-                            cmd.function(sock, mek, m, {
+                            // මෙතනට await දැම්මා async errors අහුවෙන්න
+                            await cmd.function(sock, mek, m, {
                                 from, prefix, isSudo, quoted, body, isCmd, isPre,
                                 command, args, q, isGroup, sender, senderNumber,
                                 botNumber2, botNumber, pushname, isMe, isOwner,
@@ -409,7 +430,7 @@ async function Pair(number, res = null) {
                 for (const cmd of events.commands) {
                     try {
                         if (body && cmd.on === 'body') {
-                            cmd.function(sock, mek, m, {
+                            await cmd.function(sock, mek, m, {
                                 from, prefix, quoted, body, isSudo, isCmd,
                                 command, args, q, isPre, isGroup, sender, senderNumber,
                                 botNumber2, botNumber, pushname, isMe, isOwner,
@@ -417,7 +438,7 @@ async function Pair(number, res = null) {
                                 groupAdmins, isBotAdmins, isAdmins, reply
                             });
                         } else if (mek.q && cmd.on === 'text') {
-                            cmd.function(sock, mek, m, {
+                            await cmd.function(sock, mek, m, {
                                 from, quoted, body, isSudo, isCmd, isPre,
                                 command, args, q, isGroup, sender, senderNumber,
                                 botNumber2, botNumber, pushname, isMe, isOwner,
@@ -425,7 +446,7 @@ async function Pair(number, res = null) {
                                 groupAdmins, isBotAdmins, isAdmins, reply
                             });
                         } else if ((cmd.on === 'image' || cmd.on === 'photo') && mek.type === 'imageMessage') {
-                            cmd.function(sock, mek, m, {
+                            await cmd.function(sock, mek, m, {
                                 from, prefix, quoted, isSudo, body, isCmd,
                                 command, isPre, args, q, isGroup, sender, senderNumber,
                                 botNumber2, botNumber, pushname, isMe, isOwner,
@@ -433,7 +454,7 @@ async function Pair(number, res = null) {
                                 groupAdmins, isBotAdmins, isAdmins, reply
                             });
                         } else if (cmd.on === 'sticker' && mek.type === 'stickerMessage') {
-                            cmd.function(sock, mek, m, {
+                            await cmd.function(sock, mek, m, {
                                 from, prefix, quoted, isSudo, body, isCmd,
                                 command, args, isPre, q, isGroup, sender, senderNumber,
                                 botNumber2, botNumber, pushname, isMe, isOwner,
