@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-const { createHumanEntropyService, wrapSocket } = require('baileys-antiban');
 const express = require('express');
 const fs = require('fs-extra');
 const path = require('path');
