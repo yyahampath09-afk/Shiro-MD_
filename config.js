@@ -24,7 +24,7 @@ module.exports = {
         INTERVAL_MINUTES: 15,
         RSS_URL: 'https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss',
         TARGET_JIDS: [
-            120363432680694902@newsletter
+            '120363432680694902@newsletter'
             // ඔයාගේ channel/group JIDs මෙතන දාන්න
             // '120363400734168271@newsletter',
             // '123456789-123345@g.us',
