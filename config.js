@@ -2,9 +2,9 @@ module.exports = {
     PREFIX: "/",
 
  // Bot info
-    BOT_NAME: 'SHIRO MD V1',
-    DESCRIPTION: 'Powered by SHIRO MD V1',
-    OWNER_NAME: 'Inosuke',
+    BOT_NAME: 'SHIRO MD',
+    DESCRIPTION: 'Powered by SHIRO MD',
+    OWNER_NAME: '𝙸𝙽𝙾𝚂𝚄𝙺𝙴 ',
 
     // Images
     MENU_IMAGE_URL: 'https://files.catbox.moe/lubh1p.jpg',

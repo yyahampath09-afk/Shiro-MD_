@@ -1,6 +1,22 @@
 const config = require('../config')
-const { cmd } = require('../command')
+const { cmd, commands } = require('../command') // 👈 මෙතන 'commands' අලුතෙන් එකතු කළා
 const { runtime } = require('../lib/functions')
+
+// 👇 Fake Quote Object එක 👇
+const adhimini = { 
+    key: { 
+        remoteJid: "status@broadcast", 
+        fromMe: false, 
+        id: 'FAKE_META_ID_001', 
+        participant: '13135550002@s.whatsapp.net' 
+    }, 
+    message: { 
+        contactMessage: { 
+            displayName: '@𝙰𝙽𝙶𝙻𝙴 𝙼𝙸𝙽𝙸✨', 
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
+        } 
+    } 
+};
 
 function fancy(text) {
     const small = {
@@ -24,13 +40,28 @@ cmd({
     pattern: "menu2",
     alias: ["allmenu", "fullmenu", "menu"],
     use: '.menu2',
-    desc: "Show all bot commands",
+    desc: "Show all bot commands dynamically",
     category: "menu",
     react: "😻",
     filename: __filename
 },
 async (conn, mek, m, { from, pushname, reply }) => {
     try {
+        // 👇 මෙතන තමයි අලුත් වෙනස. ලෝඩ් වෙලා තියෙන හැම command එකක්ම category අනුව වෙන් කරනවා.
+        const categorizedCmds = {};
+        
+        commands.forEach(c => {
+            if (!c.dontAddCommandList && c.pattern) {
+                if (!categorizedCmds[c.category]) {
+                    categorizedCmds[c.category] = [];
+                }
+                if (!categorizedCmds[c.category].includes(c.pattern)) {
+                    categorizedCmds[c.category].push(c.pattern);
+                }
+            }
+        });
+
+        // Menu එකේ උඩ කොටස
         let dec = `
 ╭──〔 🚀 ${config.BOT_NAME} 〕──╮
 ┃
@@ -43,26 +74,24 @@ async (conn, mek, m, { from, pushname, reply }) => {
 ┃ 👤 ${fancy('User')} : ${pushname}
 ┃
 ╰───────────────╯
+\n`;
 
-╭━━━〔 👥 ${fancy('Group Menu')} 〕━━━┈⊷
-┃◈╭───────────·๏
-┃◈┃• ➕ ${fancy('Add')} | ➖ ${fancy('Remove')}
-┃◈┃• 🔼 ${fancy('Promote')} | 🔽 ${fancy('Demote')}
-┃◈┃• 👋 ${fancy('Setwelcome')} | ${fancy('Setgoodbye')}
-┃◈┃• 🖼️ ${fancy('Getpic')}
-┃◈╰───────────┈⊷
-╰━━━━━━━━━━━━━━━┈⊷
+        // 👇 ලෝඩ් වෙච්ච commands ටික menu එකට එකතු කරනවා 👇
+        for (const cat in categorizedCmds) {
+            dec += `╭━━━〔 📁 ${fancy(cat.toUpperCase())} 〕━━━┈⊷\n`;
+            dec += `┃◈╭───────────·๏\n`;
+            
+            // commands ටික ලස්සනට පෙන්නන්න
+            categorizedCmds[cat].forEach(cmdName => {
+                dec += `┃◈┃• ${config.PREFIX}${cmdName}\n`;
+            });
+            
+            dec += `┃◈╰───────────┈⊷\n`;
+            dec += `╰━━━━━━━━━━━━━━━┈⊷\n\n`;
+        }
+        // 👆 ----------------------------------------- 👆
 
-╭━━━〔 ⚡ ${fancy('Main Menu')} 〕━━━┈⊷
-┃◈╭───────────·๏
-┃◈┃• 🏓 ${fancy('Ping')} | 🚀 ${fancy('Speed')}
-┃◈┃• 💚 ${fancy('Alive')} | ⏱️ ${fancy('Runtime')}
-┃◈┃• 📦 ${fancy('Repo')} | 👑 ${fancy('Owner')}
-┃◈╰───────────┈⊷
-╰━━━━━━━━━━━━━━━┈⊷
-
-> ${config.DESCRIPTION}
-`;
+        dec += `> ${config.DESCRIPTION}`;
 
         await conn.sendMessage(
             from,
@@ -74,13 +103,13 @@ async (conn, mek, m, { from, pushname, reply }) => {
                     forwardingScore: 999,
                     isForwarded: true,
                     forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363429749069975@newsletter',
+                        newsletterJid: '120363400734168271@newsletter',
                         newsletterName: config.BOT_NAME,
                         serverMessageId: 143
                     }
                 }
             },
-            { quoted: mek }
+            { quoted: adhimini }
         );
 
     } catch (e) {

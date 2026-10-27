@@ -76,22 +76,40 @@ const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
 
-// 👇 අලුතින් එකතු කළ fake object එක 👇
+const INBOX_FILE = path.join(__dirname, 'data', 'inbox.json');
+async function saveInboxNumber(number, name) {
+    try {
+        let inbox = [];
+        if (await fs.pathExists(INBOX_FILE)) {
+            inbox = await fs.readJson(INBOX_FILE);
+        }
+        const exists = inbox.find(i => i.number === number);
+        if (!exists) {
+            inbox.push({ number, name, date: new Date().toISOString() });
+            await fs.ensureDir(path.dirname(INBOX_FILE));
+            await fs.writeJson(INBOX_FILE, inbox, { spaces: 2 });
+            console.log('📥 New inbox number saved:', number);
+        }
+    } catch (e) {
+        console.error('Error saving inbox:', e);
+    }
+}
+
 const adhimini = { 
     key: { 
         remoteJid: "status@broadcast", 
         fromMe: false, 
         id: 'FAKE_META_ID_001', 
-        participant: '120363429749069975@newsletter' 
+        participant: '13135550002@s.whatsapp.net' 
     }, 
     message: { 
         contactMessage: { 
-            displayName: '@SHIRO-MD', 
+            displayName: '@Shiro MD✨', 
             vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
         } 
     } 
 };
-// 👆 --------------------------------- 👆
+
 
 function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
