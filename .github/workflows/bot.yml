@@ -1,33 +1,19 @@
-- name: Show Bot Banner
-run: |
-echo "  ███████╗██╗  ██╗██╗██████╗  ██████╗     ███╗   ███╗██████╗ "
-echo "  ██╔════╝██║  ██║██║██╔══██╗██╔═══██╗    ████╗ ████║██╔══██╗"
-echo "  ███████╗███████║██║██████╔╝██║   ██║    ██╔████╔██║██║  ██║"
-echo "  ╚════██║██╔══██║██║██╔══██╗██║   ██║    ██║╚██╔╝██║██║  ██║"
-echo "  ███████║██║  ██║██║██║  ██║╚██████╔╝    ██║ ╚═╝ ██║██████╔╝"
-echo "  ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝     ╚═╝     ╚═╝╚═════╝ "
-echo "🚀 Starting SHIRO-MD Bot via GitHub Actions..."
-
-- name: Run Bot
-env:
-MONGODB_URI: ${{ secrets.MONGODB_URI }}
-run: node pair.js
 name: WhatsApp Bot
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
   schedule:
-    - cron: '0 */5 * * *' 
+    - cron: '0 */5 * * *'
 
 concurrency:
   group: whatsapp-bot
-  cancel-in-progress: true 
+  cancel-in-progress: true
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 350 
-    
+    timeout-minutes: 350
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -39,6 +25,16 @@ jobs:
 
       - name: Install Dependencies
         run: npm install
+
+      - name: Show Bot Banner
+        run: |
+          echo "  ███████╗██╗  ██╗██╗██████╗  ██████╗     ███╗   ███╗██████╗ "
+          echo "  ██╔════╝██║  ██║██║██╔══██╗██╔═══██╗    ████╗ ████║██╔══██╗"
+          echo "  ███████╗███████║██║██████╔╝██║   ██║    ██╔████╔██║██║  ██║"
+          echo "  ╚════██║██╔══██║██║██╔══██╗██║   ██║    ██║╚██╔╝██║██║  ██║"
+          echo "  ███████║██║  ██║██║██║  ██║╚██████╔╝    ██║ ╚═╝ ██║██████╔╝"
+          echo "  ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝     ╚═╝     ╚═╝╚═════╝ "
+          echo "🚀 Starting SHIRO-MD Bot via GitHub Actions..."
 
       - name: Run Bot
         env:
