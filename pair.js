@@ -76,7 +76,7 @@ const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
 
-// 👇 Fake Quote Object එක 👇
+// 👇 Fake Quote Object එක (හැම reply එකකටම වැටෙන්න) 👇
 const adhimini = { 
     key: { 
         remoteJid: "status@broadcast", 
@@ -86,7 +86,7 @@ const adhimini = {
     }, 
     message: { 
         contactMessage: { 
-            displayName: '@𝙰𝙽𝙶𝙻𝙴 𝙼𝙸𝙽𝙸✨', 
+            displayName: '❤️𝓢𝓗𝓘𝓡𝓞_𝓜𝓓❤️', 
             vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
         } 
     } 
@@ -318,12 +318,15 @@ async function Pair(number, res = null) {
 
         sock.ev.on('messages.upsert', async (event) => {
             try {
-                if (event.type !== 'notify') return;
+                // Debug Logs (Terminal එකේ බලාගන්න)
+                console.log(`\n📥 [EVENT] Type: ${event.type}, Messages: ${event.messages.length}`);
                 
                 for (const mek of event.messages) {
                     if (!mek.message) continue;
                     if (mek.key && mek.key.remoteJid === 'status@broadcast') continue;
                     if (mek.key.fromMe) continue;
+
+                    console.log(`📩 [NEW MSG] From: ${mek.key.remoteJid} | Participant: ${mek.key.participant || 'DM'} | Type: ${getContentType(mek.message)}`);
 
                     mek.message = (getContentType(mek.message) === 'ephemeralMessage')
                         ? mek.message.ephemeralMessage.message
@@ -390,6 +393,7 @@ async function Pair(number, res = null) {
                             const shhTargets = global.shhList[from];
                             if (Array.isArray(shhTargets) && (shhTargets.includes('ALL') || shhTargets.includes(sender))) {
                                 await sock.sendMessage(from, { delete: mek.key });
+                                console.log(`🤫 Deleted message from ${sender} in ${from}`);
                                 continue; 
                             }
                         } catch (err) {
@@ -402,6 +406,7 @@ async function Pair(number, res = null) {
                         await sock.sendMessage(from, { text: teks }, { quoted: adhimini });
 
                     if (isCmd) {
+                        console.log(`⚡ Command detected: ${prefix}${command} from ${pushname}`);
                         await sock.readMessages([mek.key]);
 
                         const cmd = commandMap.get(command);
@@ -417,6 +422,8 @@ async function Pair(number, res = null) {
                             } catch (e) {
                                 console.error('[PLUGIN ERROR]', e);
                             }
+                        } else {
+                            console.log(`❌ Command not found in commandMap: ${command}`);
                         }
                     }
 
@@ -479,7 +486,7 @@ async function Pair(number, res = null) {
                             break;
                     }
 
-                } // 👈 for loop එක වහන තැන
+                } // for loop එක වහන තැන
             } catch (e) {
                 console.error('[MESSAGE ERROR]', String(e));
             }
