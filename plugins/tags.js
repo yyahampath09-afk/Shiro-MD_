@@ -4,6 +4,21 @@ const path = require('path');
 
 const SHH_FILE = path.join(__dirname, '..', 'data', 'shh.json');
 
+// Load SHH List on startup
+if (fs.existsSync(SHH_FILE)) {
+    try {
+        global.shhList = fs.readJsonSync(SHH_FILE);
+    } catch (e) {
+        global.shhList = {};
+    }
+} else {
+    global.shhList = {};
+    if (!fs.existsSync(path.dirname(SHH_FILE))) {
+        fs.mkdirSync(path.dirname(SHH_FILE), { recursive: true });
+    }
+    fs.writeJsonSync(SHH_FILE, {});
+}
+
 // ─── TAG ALL ───
 cmd({
     pattern: "tagall",
@@ -12,10 +27,9 @@ cmd({
     react: "📢",
     filename: __filename
 },
-async (conn, mek, m, { from, isGroup, isAdmins, groupMetadata, reply, q }) => {
+async (conn, mek, m, { from, isGroup, groupMetadata, reply, q }) => {
     try {
         if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
-        // if (!isAdmins) return reply('❌ මේක පාවිච්චි කරන්න admin කෙනෙක් වෙන්න ඕනේ.');
 
         const participants = groupMetadata.participants.map(p => p.id);
         const text = q ? q : 'Attention Everyone!';
@@ -64,78 +78,98 @@ async (conn, mek, m, { from, isGroup, isAdmins, groupMetadata, reply, q }) => {
     }
 });
 
-// ─── SHH (Auto Delete) ───
+// ─── MUTE (Lock Group / Auto Delete User) ───
 cmd({
-    pattern: "shh",
-    desc: "Auto delete messages from a user or everyone.",
+    pattern: "mute",
+    alias: ["lock", "groupclose"],
+    desc: "Lock group (no tag) or auto delete messages from a user (tag/reply).",
     category: "group",
-    react: "🤫",
+    react: "🔇",
     filename: __filename
 },
-async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, q, args, sender }) => {
+async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, args }) => {
     try {
         if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
         if (!isAdmins) return reply('❌ මේක පාවිච්චි කරන්න admin කෙනෙක් වෙන්න ඕනේ.');
-        if (!isBotAdmins) return reply('❌ මට මැසේජ් delete කරන්න bot එක admin වෙන්න ඕනේ.');
+        if (!isBotAdmins) return reply('❌ මට මේක කරන්න bot එක admin වෙන්න ඕනේ.');
 
+        // 1. කෙනෙක්ව Tag කරලා හෝ Reply කරලා තියෙනවා නම් (User Auto-Delete)
         let targetJid = null;
-        let action = null;
-
-        // .shh on / .shh off (හැමෝටම)
-        if (args[0] === 'on' || args[0] === 'off') {
-            targetJid = 'ALL';
-            action = args[0];
-        } 
-        // .shh @user on / .shh @user off
-        else if (m.mentionUser && m.mentionUser.length > 0 && (args[1] === 'on' || args[1] === 'off')) {
-            targetJid = m.mentionUser[0];
-            action = args[1];
-        }
-        // reply කරලා .shh on / .shh off
-        else if (m.quoted && (args[1] === 'on' || args[1] === 'off')) {
-            targetJid = m.quoted.sender;
-            action = args[1];
-        }
-        // .shh 94771234567 on / .shh 94771234567 off
-        else if (args[0] && args[1] && (args[1] === 'on' || args[1] === 'off')) {
-            const num = args[0].replace(/[^0-9]/g, '');
-            if (num.length >= 9) {
-                targetJid = `${num}@s.whatsapp.net`;
-                action = args[1];
-            }
+        if (m.quoted) targetJid = m.quoted.sender;
+        else if (m.mentionUser && m.mentionUser.length > 0) targetJid = m.mentionUser[0];
+        else if (args[0] && !isNaN(args[0]) && args[0].replace(/[^0-9]/g, '').length >= 9) {
+            targetJid = `${args[0].replace(/[^0-9]/g, '')}@s.whatsapp.net`;
         }
 
-        if (!targetJid || !action) {
-            return reply("🤫 *SHH COMMAND*\n\n*Usage:*\n`.shh on` (හැමෝගේම delete)\n`.shh off`\n`.shh @user on`\n`.shh @user off`\nහෝ user ගේ මැසේජ් එකකට reply කරලා `.shh on` කරන්න.");
+        if (targetJid) {
+            let shhData = {};
+            if (fs.existsSync(SHH_FILE)) shhData = await fs.readJson(SHH_FILE);
+            if (!shhData[from]) shhData[from] = [];
+
+            const numOnly = targetJid.split('@')[0];
+            if (!shhData[from].includes(targetJid)) shhData[from].push(targetJid);
+            if (!shhData[from].includes(`${numOnly}@s.whatsapp.net`)) shhData[from].push(`${numOnly}@s.whatsapp.net`);
+            if (!shhData[from].includes(`${numOnly}@lid`)) shhData[from].push(`${numOnly}@lid`);
+
+            await fs.writeJson(SHH_FILE, shhData, { spaces: 2 });
+            global.shhList = shhData;
+            
+            return reply(`🔇 *MUTED:* @${numOnly} ගේ මැසේජ් ඉබේම ඩිලීට් වේ.`);
         }
 
-        // Database එක load කරගන්නවා
-        let shhData = {};
-        if (fs.existsSync(SHH_FILE)) {
-            shhData = await fs.readJson(SHH_FILE);
-        }
-
-        if (!shhData[from]) shhData[from] = [];
-
-        if (action === 'on') {
-            if (!shhData[from].includes(targetJid)) {
-                shhData[from].push(targetJid);
-            }
-            reply(`✅ SHH ON: ${targetJid === 'ALL' ? 'හැමෝගේම' : '@' + targetJid.split('@')[0] + ' ගේ'} මැසේජ් delete වේ.`);
-        } else {
-            shhData[from] = shhData[from].filter(id => id !== targetJid);
-            reply(`✅ SHH OFF: ${targetJid === 'ALL' ? 'හැමෝගේම' : '@' + targetJid.split('@')[0] + ' ගේ'} මැසේජ් delete වීම නැවතුණා.`);
-        }
-
-        await fs.writeJson(SHH_FILE, shhData, { spaces: 2 });
-        global.shhList = shhData; // pair.js එකට යන්න
+        // 2. කාවවත් tag කරලා නැත්නම් (Group Lock)
+        await conn.groupSettingUpdate(from, 'announcement');
+        reply("🔒 *Group Locked!*\n\nදැන් ඉඳන් මේ ගෲප් එකේ මැසේජ් දාන්න පුළුවන් Admin ලට විතරයි.");
 
     } catch (e) {
         console.log(e);
         reply(`❌ Error: ${e.message}`);
     }
 });
-// Load SHH List on startup
-if (fs.existsSync(SHH_FILE)) {
-    global.shhList = fs.readJsonSync(SHH_FILE);
-}
+
+// ─── UNMUTE (Unlock Group / Stop Auto Delete User) ───
+cmd({
+    pattern: "unmute",
+    alias: ["unlock", "groupopen"],
+    desc: "Unlock group (no tag) or stop auto deleting messages from a user (tag/reply).",
+    category: "group",
+    react: "🔊",
+    filename: __filename
+},
+async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, args }) => {
+    try {
+        if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
+        if (!isAdmins) return reply('❌ මේක පාවිච්චි කරන්න admin කෙනෙක් වෙන්න ඕනේ.');
+        if (!isBotAdmins) return reply('❌ මට මේක කරන්න bot එක admin වෙන්න ඕනේ.');
+
+        // 1. කෙනෙක්ව Tag කරලා හෝ Reply කරලා තියෙනවා නම් (Stop User Auto-Delete)
+        let targetJid = null;
+        if (m.quoted) targetJid = m.quoted.sender;
+        else if (m.mentionUser && m.mentionUser.length > 0) targetJid = m.mentionUser[0];
+        else if (args[0] && !isNaN(args[0]) && args[0].replace(/[^0-9]/g, '').length >= 9) {
+            targetJid = `${args[0].replace(/[^0-9]/g, '')}@s.whatsapp.net`;
+        }
+
+        if (targetJid) {
+            let shhData = {};
+            if (fs.existsSync(SHH_FILE)) shhData = await fs.readJson(SHH_FILE);
+            if (!shhData[from]) shhData[from] = [];
+
+            const numOnly = targetJid.split('@')[0];
+            shhData[from] = shhData[from].filter(id => id !== targetJid && id.split('@')[0] !== numOnly);
+
+            await fs.writeJson(SHH_FILE, shhData, { spaces: 2 });
+            global.shhList = shhData;
+            
+            return reply(`🔊 *UNMUTED:* @${numOnly} ගේ මැසේජ් ඩිලීට් වීම නැවතුණා.`);
+        }
+
+        // 2. කාවවත් tag කරලා නැත්නම් (Group Unlock)
+        await conn.groupSettingUpdate(from, 'not_announcement');
+        reply("🔓 *Group Unlocked!*\n\nදැන් ගෲප් එකේ හැමෝටම මැසේජ් දාන්න පුළුවන්.");
+
+    } catch (e) {
+        console.log(e);
+        reply(`❌ Error: ${e.message}`);
+    }
+});

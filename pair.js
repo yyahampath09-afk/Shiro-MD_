@@ -76,21 +76,8 @@ const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
 
-// 👇 Fake Quote Object එක (හැම reply එකකටම වැටෙන්න) 👇
-const adhimini = { 
-    key: { 
-        remoteJid: "status@broadcast", 
-        fromMe: false, 
-        id: 'FAKE_META_ID_001', 
-        participant: '13135550002@s.whatsapp.net' 
-    }, 
-    message: { 
-        contactMessage: { 
-            displayName: '❤️𝓢𝓗𝓘𝓡𝓞_𝓜𝓓❤️', 
-            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
-        } 
-    } 
-};
+// 👇 Group Metadata Cache එක (Rate Limit නවත්තන්න) 👇
+global.groupCache = new Map();
 
 function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
@@ -318,15 +305,10 @@ async function Pair(number, res = null) {
 
         sock.ev.on('messages.upsert', async (event) => {
             try {
-                // Debug Logs (Terminal එකේ බලාගන්න)
-                console.log(`\n📥 [EVENT] Type: ${event.type}, Messages: ${event.messages.length}`);
-                
                 for (const mek of event.messages) {
                     if (!mek.message) continue;
                     if (mek.key && mek.key.remoteJid === 'status@broadcast') continue;
                     if (mek.key.fromMe) continue;
-
-                    console.log(`📩 [NEW MSG] From: ${mek.key.remoteJid} | Participant: ${mek.key.participant || 'DM'} | Type: ${getContentType(mek.message)}`);
 
                     mek.message = (getContentType(mek.message) === 'ephemeralMessage')
                         ? mek.message.ephemeralMessage.message
@@ -355,9 +337,12 @@ async function Pair(number, res = null) {
                     const q = args.join(' ');
                     
                     const isGroup = from.endsWith('@g.us');
-                    const sender = mek.key.fromMe
+                    
+                    // LID ප්‍රශ්නය විසඳීම (Real Number එක ගැනීම)
+                    let sender = mek.key.fromMe
                         ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
-                        : (mek.key.participant || mek.key.remoteJid);
+                        : (mek.key.senderPn || mek.key.participant || mek.key.remoteJid);
+                    
                     const senderNumber = sender.split('@')[0];
                     const botNumber = sock.user.id.split(':')[0];
                     const botNumber2 = await jidNormalizedUser(sock.user.id);
@@ -372,41 +357,89 @@ async function Pair(number, res = null) {
                     let isBotAdmins = false;
                     let isAdmins = false;
 
+                    // Caching System for Group Metadata (Rate Limit එක නවත්තන්න)
                     if (isGroup) {
                         try {
-                            groupMetadata = await sock.groupMetadata(from);
+                            const now = Date.now();
+                            const cached = global.groupCache.get(from);
+                            
+                            if (cached && (now - cached.timestamp < 5 * 60 * 1000)) {
+                                groupMetadata = cached.data;
+                            } else {
+                                groupMetadata = await sock.groupMetadata(from);
+                                global.groupCache.set(from, { data: groupMetadata, timestamp: now });
+                            }
+                            
                             groupName = groupMetadata.subject || '';
                             participants = groupMetadata.participants || [];
-                            groupAdmins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin').map(p => p.id);
                             
-                            const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-                            isBotAdmins = groupAdmins.includes(botId) || groupAdmins.includes(botNumber2);
-                            isAdmins = groupAdmins.includes(sender);
+                            const isAdmin = (p) => p.admin === 'admin' || p.admin === 'superadmin';
+                            const adminParticipants = participants.filter(isAdmin);
+                            
+                            const botNumber = sock.user.id.split(':')[0];
+                            const botLid = sock.user.lid ? sock.user.lid.split(':')[0] : null;
+                            const senderLid = mek.key.participant;
+                            const senderPn = mek.key.senderPn;
+
+                            // 👇 Bot Admin ද කියලා බලනවා (LID සහ PN දෙකම චෙක් කරනවා) 👇
+                            isBotAdmins = adminParticipants.some(p => {
+                                const pId = (p.id || '').split('@')[0];
+                                const pJid = (p.jid || '').split('@')[0];
+                                return pId === botNumber || pJid === botNumber || (botLid && (pId === botLid || pJid === botLid));
+                            });
+
+                            // 👇 Sender Admin ද කියලා බලනවා (LID සහ PN දෙකම චෙක් කරනවා) 👇
+                            isAdmins = adminParticipants.some(p => {
+                                const pId = (p.id || '').split('@')[0];
+                                const pJid = (p.jid || '').split('@')[0];
+                                
+                                const matchesSenderLid = (senderLid && (pId === senderLid.split('@')[0] || pJid === senderLid.split('@')[0]));
+                                const matchesSenderPn = (senderPn && (pId === senderPn.split('@')[0] || pJid === senderPn.split('@')[0]));
+                                
+                                return matchesSenderLid || matchesSenderPn;
+                            });
+                            
+                            // Fallback: අංකය වලින් වත් හරි යනවද බලනවා
+                            if (!isAdmins && senderNumber) {
+                                isAdmins = adminParticipants.some(p => {
+                                    const pId = (p.id || '').split('@')[0];
+                                    const pJid = (p.jid || '').split('@')[0];
+                                    return pId === senderNumber || pJid === senderNumber;
+                                });
+                            }
                         } catch (err) {
                             console.log("Group Metadata Error:", err.message);
                         }
                     }
 
-                    // 👇 SHH AUTO DELETE LOGIC 👇
+                    // SHH AUTO DELETE LOGIC (LID සහ PN දෙකම චෙක් කරයි)
                     if (isGroup && !isMe && isBotAdmins && global.shhList && global.shhList[from]) {
                         try {
                             const shhTargets = global.shhList[from];
-                            if (Array.isArray(shhTargets) && (shhTargets.includes('ALL') || shhTargets.includes(sender))) {
+                            const rawParticipant = mek.key.participant;
+                            
+                            const isTargeted = Array.isArray(shhTargets) && (
+                                shhTargets.includes('ALL') || 
+                                shhTargets.includes(sender) || 
+                                shhTargets.includes(rawParticipant) || 
+                                shhTargets.some(t => t.split('@')[0] === senderNumber)
+                            );
+
+                            if (isTargeted) {
                                 await sock.sendMessage(from, { delete: mek.key });
-                                console.log(`🤫 Deleted message from ${sender} in ${from}`);
+                                console.log(`🤫 Deleted message from ${senderNumber} in ${from}`);
                                 continue; 
                             }
                         } catch (err) {
                             console.log("Shh delete error:", err.message);
                         }
                     }
-                    // 👆 --------------------- 👆
 
                     const reply = async (teks) =>
-                        await sock.sendMessage(from, { text: teks }, { quoted: adhimini });
+                        await sock.sendMessage(from, { text: teks }, { quoted: mek });
 
+                    // Command එකක් නම් විතරක් Seen කරනවා
                     if (isCmd) {
-                        console.log(`⚡ Command detected: ${prefix}${command} from ${pushname}`);
                         await sock.readMessages([mek.key]);
 
                         const cmd = commandMap.get(command);
@@ -422,8 +455,6 @@ async function Pair(number, res = null) {
                             } catch (e) {
                                 console.error('[PLUGIN ERROR]', e);
                             }
-                        } else {
-                            console.log(`❌ Command not found in commandMap: ${command}`);
                         }
                     }
 
@@ -485,8 +516,7 @@ async function Pair(number, res = null) {
                         default:
                             break;
                     }
-
-                } // for loop එක වහන තැන
+                } 
             } catch (e) {
                 console.error('[MESSAGE ERROR]', String(e));
             }
