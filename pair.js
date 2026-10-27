@@ -38,7 +38,7 @@ if (!MONGODB_URI) {
 }
 
 mongoose.connect(MONGODB_URI)
-    .then(() => console.log('𝐌ᴏɴɢᴏ𝐃𝐁 𝐂ᴏɴɴᴇᴄᴛᴇᴅ ✅'))
+    .then(() => console.log('Mongo db Connected පකෝ ✅'))
     .catch(err => console.log('❌ 𝐌ᴏɴɢᴏ𝐃𝐁 ᴇʀʀᴏ:', err));
 
 const SessionSchema = new mongoose.Schema({
@@ -53,7 +53,7 @@ fs.readdirSync("./plugins/").forEach((plugin) => {
         require("./plugins/" + plugin);
     }
 });
-console.log('𝐀ʟʟ 𝐏ʟᴜɢɪɴꜱ 𝐈ɴꜱᴛᴀʟʟᴇ𝐃 ⚡');
+console.log('plugings ඔක්කොම හරි පකෝ  ⚡');
 
 const events = require('./command');
 
@@ -566,10 +566,28 @@ app.get('/pair', async (req, res) => {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+// 👇 Ngrok Setup 👇
+const ngrok = require("@ngrok/ngrok");
+
 app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     await fs.ensureDir(SESSION_BASE_PATH);
     await restoreAllSessions();
+
+    // Ngrok Tunnel එක Start කරන්න
+    try {
+        const listener = await ngrok.forward({
+            addr: PORT,
+            authtoken_from_env: true // මේකෙන් .env එකේ තියෙන NGROK_AUTHTOKEN එක ගන්නවා
+        });
+        console.log(`\n======================================================`);
+        console.log(`🌐 Ngrok Web URL: ${listener.url()}`);
+        console.log(`👉 Pairing Code ගන්න මේ ලින්ක් එකට පල : ${listener.url()}`);
+        console.log(`======================================================\n`);
+    } catch (e) {
+        console.error("❌ Ngrok Error:", e.message);
+        console.log("👉 .env එකේ NGROK_AUTHTOKEN එක හරියට දාලා තියෙනවද කියල බලහන් පකෝ.");
+    }
 });
 
 process.on('uncaughtException', (err) => {
