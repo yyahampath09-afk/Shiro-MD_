@@ -178,10 +178,11 @@ async function Pair(number, res = null) {
         const { version } = await fetchLatestBaileysVersion();
         const logger = pino({ level: 'silent' });
 
-        const sock = wrapSocket(makeWASocket({
+        // 1. මුලින්ම සාමාන්‍ය socket එක හදන්න
+        const rawSock = makeWASocket({
             version,
             logger,
-            browser: ["Ubuntu", "Chrome", "110.0.5481.77"], // 👈 සරලව Array එකක් විදියට දාන්න
+            browser: ["Ubuntu", "Chrome", "110.0.5481.77"], 
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -193,9 +194,22 @@ async function Pair(number, res = null) {
             defaultQueryTimeoutMs: 30000,
             keepAliveIntervalMs: 30000,
             msgRetryCounterCache
-        }), {
-            preset: 'conservative' // 👈 Anti-Ban Presets (Rate limits සහ delays)
         });
+
+        // 2. ඊට පස්සේ ඒක wrapSocket එකට දෙන්න
+        const sock = wrapSocket(rawSock, {
+            preset: 'conservative'
+        });
+
+        // 👇 baileys-antiban එකට අවශ්‍ය අඩුපාඩු පිරවීම (Monkey Patch) 👇
+        sock.wasp = sock.ev; 
+        sock.circuitBreaker = {
+            execute: async (fn) => await fn(),
+            fire: () => {},
+            success: () => {},
+            fail: () => {}
+        };
+        // 👆 -------------------------------------------------- 👆
 
         activeSockets[sessionId] = sock;
 
