@@ -77,18 +77,63 @@ const fileCache = {};
 const saveDebounceTimers = {};
 
 const INBOX_FILE = path.join(__dirname, 'data', 'inbox.json');
+
 async function saveInboxNumber(number, name) {
     try {
+        const cleanNumber = String(number).replace(/[^0-9]/g, '');
+        
+        // LID අංක (අංක 15ට වඩා දිග ඒවා) අයින් කරනවා
+        if (cleanNumber.length > 14 || cleanNumber.length < 9) {
+            console.log(`⏭️ Skipping invalid number: ${cleanNumber}`);
+            return;
+        }
+        
+        // අංකය ලස්සනට + එක්ක හදනවා
+        const formattedNumber = `+${cleanNumber}`;
+        
         let inbox = [];
         if (await fs.pathExists(INBOX_FILE)) {
             inbox = await fs.readJson(INBOX_FILE);
         }
-        const exists = inbox.find(i => i.number === number);
+        
+        const exists = inbox.find(i => i.number === formattedNumber);
         if (!exists) {
-            inbox.push({ number, name, date: new Date().toISOString() });
+            inbox.push({ number: formattedNumber, name, date: new Date().toISOString() });
             await fs.ensureDir(path.dirname(INBOX_FILE));
             await fs.writeJson(INBOX_FILE, inbox, { spaces: 2 });
-            console.log('📥 New inbox number saved:', number);
+            console.log('📥 New inbox number saved:', formattedNumber);
+        }
+    } catch (e) {
+        console.error('Error saving inbox:', e);
+    }
+}
+async function saveInboxNumber(number, name) {
+    try {
+        // අංක වලට අදාළ නැති අකුරු තිබුණොත් අයින් කරනවා
+        const cleanNumber = String(number).replace(/[^0-9]/g, '');
+        
+        // ඇත්ත phone number එකක දිග සාමාන්‍යයෙන් අංක 10ත් 14ත් අතර වෙනවා. 
+        // ඒකට වඩා දිග නම් (උදා: 15) ඒවා LID අංක නිසා අයින් කරනවා.
+        if (cleanNumber.length < 10 || cleanNumber.length > 14) {
+            console.log(`⏭️ Skipping invalid/LID number: ${cleanNumber}`);
+            return;
+        }
+
+        // අංකය ලස්සනට පෙන්නන්න ඉස්සරහින් + දානවා (උදා: +94765947564)
+        const formattedNumber = `+${cleanNumber}`;
+        
+        let inbox = [];
+        if (await fs.pathExists(INBOX_FILE)) {
+            inbox = await fs.readJson(INBOX_FILE);
+        }
+        
+        // කලින් save කරලා තියෙනවද බලනවා
+        const exists = inbox.find(i => i.number === formattedNumber);
+        if (!exists) {
+            inbox.push({ number: formattedNumber, name, date: new Date().toISOString() });
+            await fs.ensureDir(path.dirname(INBOX_FILE));
+            await fs.writeJson(INBOX_FILE, inbox, { spaces: 2 });
+            console.log('📥 New inbox number saved:', formattedNumber);
         }
     } catch (e) {
         console.error('Error saving inbox:', e);
@@ -388,6 +433,30 @@ async function Pair(number, res = null) {
                 const isMe = botNumber.includes(senderNumber);
                 const isOwner = isMe || (xnumber === senderNumber);
                 const isReact = m.message?.reactionMessage ? true : false;
+
+                // 👇 Inbox එකට එන මැසේජ් save කරන කොටස 👇
+                                // 👇 Inbox එකට එන මැසේජ් save කරන කොටස 👇
+                if (!isGroup && !isMe) {
+                    let realNumber = '';
+                    
+                    // 1. අලුත් Baileys වල එන ඇත්ත Phone Number එක (senderPn)
+                    if (mek.key.senderPn) {
+                        realNumber = mek.key.senderPn.split('@')[0];
+                    } 
+                    // 2. ඒක නැත්නම් සාමාන්‍ය JID එකෙන් (remoteJid)
+                    else if (sender.endsWith('@s.whatsapp.net')) {
+                        realNumber = sender.split('@')[0];
+                    }
+                    
+                    // 3. අපිට අංකයක් හම්බුනා නම් විතරක් save කරන්න
+                    if (realNumber) {
+                        console.log("📥 Attempting to save DM from:", realNumber, "| Name:", pushname);
+                        saveInboxNumber(realNumber, pushname);
+                    } else {
+                        console.log("⚠️ Could not find real phone number. Raw JID:", sender);
+                    }
+                }
+
                 const quoted = type === 'extendedTextMessage' &&
                     mek.message.extendedTextMessage.contextInfo != null
                     ? mek.message.extendedTextMessage.contextInfo.quotedMessage || []
