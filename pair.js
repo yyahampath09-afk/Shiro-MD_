@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const { createHumanEntropyService } = require('baileys-antiban');
 const express = require('express');
 const fs = require('fs-extra');
 const path = require('path');
@@ -177,9 +178,12 @@ async function Pair(number, res = null) {
         const { version } = await fetchLatestBaileysVersion();
         const logger = pino({ level: 'silent' });
 
-        const sock = makeWASocket({
+        const { wrapSocket, Browsers } = require('baileys-antiban');
+        
+        const sock = wrapSocket(makeWASocket({
             version,
             logger,
+            browser: Browsers.macOS('Chrome'), // 👈 Linked Devices එකේ පෙන්නන්නේ "Chrome" කියලා
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -191,6 +195,8 @@ async function Pair(number, res = null) {
             defaultQueryTimeoutMs: 30000,
             keepAliveIntervalMs: 30000,
             msgRetryCounterCache
+        }), {
+            preset: 'conservative' // 👈 Anti-Ban Presets (Rate limits සහ delays)
         });
 
         activeSockets[sessionId] = sock;
@@ -278,6 +284,20 @@ async function Pair(number, res = null) {
                 }
             } else if (connection === 'open') {
                 console.log('✅ 𝐂onnected:', sessionId);
+
+                // 👇 Anti-Ban: Human Entropy Service එක පටන් ගන්න 👇
+                try {
+                    const entropy = createHumanEntropyService(sock, sessionId, {
+                        enabled: true,
+                        minIntervalMs: 2 * 60 * 60 * 1000, // පැය 2ත් 6ත් අතර
+                        maxIntervalMs: 6 * 60 * 60 * 1000,
+                    });
+                    entropy.start();
+                    console.log('🧠 Human Entropy Service started (Anti-Ban)');
+                } catch (err) {
+                    console.log('⚠️ Human Entropy Service error:', err.message);
+                }
+                // 👆 -------------------------------------------------- 👆
 
                 keepAliveTimers[sessionId] = setInterval(async () => {
                     if (!activeSockets[sessionId]) {
