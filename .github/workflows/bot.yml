@@ -36,10 +36,7 @@ jobs:
           echo "  ╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝ ╚═════╝     ╚═╝     ╚═╝╚═════╝ "
           echo "🚀 Starting SHIRO-MD Bot via GitHub Actions..."
 
-            - name: Run Bot
+      - name: Run Bot
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          WA_ANTIBAN_PRESET: 'conservative' # 👈 'conservative', 'moderate', හෝ 'aggressive'
-          WA_ANTIBAN_MIN_DELAY: '1500'      # අවම delay එක (ms)
-          WA_ANTIBAN_MAX_DELAY: '4000'      # උපරිම delay එක (ms)
         run: node pair.js
