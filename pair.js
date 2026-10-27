@@ -580,3 +580,19 @@ process.on('uncaughtException', (err) => {
     if (e.includes('Value not found')) return;
     console.log('Caught exception:', err);
 });
+
+// 👇 GitHub Actions වලින් kill කරද්දී session එක save වෙන්න 👇
+['SIGINT', 'SIGTERM'].forEach(signal => {
+    process.on(signal, async () => {
+        console.log(`\n⚠️ Received ${signal}. Saving sessions before exit...`);
+        for (const sessionId in activeSockets) {
+            const sessionPath = path.join(SESSION_BASE_PATH, sessionId);
+            try {
+                await saveSession(sessionId, sessionPath);
+            } catch (err) {
+                console.error('Final save failed:', err.message);
+            }
+        }
+        process.exit(0);
+    });
+});
