@@ -1,19 +1,8 @@
-// plugins/anime-calendar.js — Daily Anime Release Calendar (IPv4 Fix + Retry)
+// plugins/anime-calendar.js — Daily Anime Release Calendar (AniList API)
 const axios = require('axios');
-const http = require('http');
-const https = require('https');
 const cron = require('node-cron');
 const config = require('../config');
 const { cmd } = require('../command');
-
-// 👇 IPv4 force කරන axios instance එක (GitHub Actions IPv6 ප්‍රශ්නය විසඳීමට) 👇
-const ipv4Agent = {
-    httpAgent: new http.Agent({ family: 4 }),
-    httpsAgent: new https.Agent({ family: 4 }),
-    timeout: 20000 // තත්පර 20 timeout
-};
-const axiosIPv4 = axios.create(ipv4Agent);
-// 👆 -------------------------------------------------- 👆
 
 const CALENDAR_IMAGE_URL = 'https://files.catbox.moe/s39kdz.jpeg';
 
@@ -51,75 +40,78 @@ async function sendWithAntiBan(sock, jid, text, imageUrl = null, quoted = null) 
 
 async function getDailyAnimeText() {
     const today = new Date();
-    const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(); 
-    const displayDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }); 
     
-    // 👇 Retry logic එක (3 වතාවක් උත්සාහ කරයි) 👇
-    let animeList = null;
-    let lastError = null;
+    // 👇 අද දවසේ පටන් ගන්නා සහ ඉවර වන වෙලාව (ශ්‍රී ලංකා වේලාවෙන්) 👇
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
     
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            console.log(`📡 Fetching Jikan API (Attempt ${attempt}/3)...`);
-            const response = await axiosIPv4.get(`https://api.jikan.moe/v4/schedules?filter=${dayName}&sfw=true`);
-            animeList = response.data.data;
-            break; // සාර්ථක නම් loop එකෙන් ඉවත් වෙනවා
-        } catch (e) {
-            lastError = e;
-            console.error(`❌ Attempt ${attempt} failed:`, e.message);
-            if (attempt < 3) {
-                // ඊළඟ උත්සාහයට කලින් තත්පර 2-4ක් ඉන්නවා
-                await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+    const startTs = Math.floor(startOfDay.getTime() / 1000);
+    const endTs = Math.floor(endOfDay.getTime() / 1000);
+
+    // AniList GraphQL Query
+    const query = `
+    query ($start: Int, $end: Int) {
+      Page(page: 1, perPage: 50) {
+        airingSchedules(airingAt_greater: $start, airingAt_lesser: $end, sort: TIME) {
+          airingAt
+          media {
+            title {
+              romaji
+              english
             }
+          }
         }
+      }
     }
-    // 👆 -------------------------------------------------- 👆
+    `;
 
-    if (!animeList || animeList.length === 0) {
-        return `❌ අද දිනයට (${displayDay}) කිසිම anime එකක් හම්බුනේ නෑ.\n\n_Error: ${lastError ? lastError.message : 'No data'}_`;
-    }
+    try {
+        console.log(`📡 Fetching AniList API...`);
+        const response = await axios.post('https://graphql.anilist.co', {
+            query: query,
+            variables: { start: startTs, end: endTs }
+        }, { timeout: 15000 });
 
-    const maxAnime = 30;
-    const displayedList = animeList.slice(0, maxAnime);
+        const schedules = response.data.data.Page.airingSchedules;
 
-    let message = `╭━━━〔 📺 TODAY ANIME 〕━━━╮\n`;
-    message += `┃ 📅 Day: ${displayDay}\n`;
-    message += `┃ 🎬 Total: ${displayedList.length}\n`;
-    message += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-
-    displayedList.forEach((anime, index) => {
-        const title = anime.title;
-        let time = anime.broadcast?.string || 'TBA';
-        if (anime.broadcast && anime.broadcast.time) {
-            time = anime.broadcast.time;
-        } else if (time.includes('at ')) {
-            time = time.split('at ')[1].replace(' (JST)', '');
+        if (!schedules || schedules.length === 0) {
+            return `❌ අද දිනයට (${dayName}) කිසිම anime එකක් හම්බුනේ නෑ.`;
         }
 
-        if (time.match(/^\d{2}:\d{2}$/)) {
-            let [hours, minutes] = time.split(':');
-            hours = parseInt(hours);
-            const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12;
-            hours = hours ? hours : 12;
-            time = `${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
-        }
+        // Format the message
+        let message = `╭━━━〔 📺 TODAY ANIME 〕━━━╮\n`;
+        message += `┃ 📅 Day: ${dayName}\n`;
+        message += `┃ 🎬 Total: ${schedules.length}\n`;
+        message += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
 
-        message += `${index + 1}. ${title}\n`;
-        message += `🕐 ${time}\n\n`;
-    });
+        schedules.forEach((schedule, index) => {
+            const title = schedule.media.title.english || schedule.media.title.romaji;
+            
+            // වෙලාව ශ්‍රී ලංකා වේලාවට (Asia/Colombo) හරවනවා
+            const time = new Date(schedule.airingAt * 1000).toLocaleTimeString('en-US', { 
+                timeZone: 'Asia/Colombo', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                hour12: true 
+            });
 
-    if (animeList.length > maxAnime) {
-        message += `_...සහ තවත් ${animeList.length - maxAnime}ක් තියෙනවා._\n\n`;
+            message += `${index + 1}. ${title}\n`;
+            message += `🕐 ${time}\n\n`;
+        });
+
+        message += `> ⚠️ මෙහි ඇති වේලාවන් සුළු වශයෙන් වෙනස් විය හැකිය. ⚠️\n`;
+        message += `> ⚡ᴾᵒʷᵉʳᵉᵈ ᵇʸ ᴷⁱⁿᵍᴾᵒᵈᵈᵃᴹᵒᵈᶻ 𝙓 ᴵⁿᵒˢᵘᵏᵉ`;
+        
+        return message;
+
+    } catch (error) {
+        console.error('❌ AniList API Error:', error.message);
+        return `❌ API එකෙන් දත්ත ගන්න බැරි වුණා. කරුණාකර පසුව උත්සාහ කරන්න.`;
     }
-
-    message += `> ⚠️ මෙහි ඇති වේලාවන් සුළු වශයෙන් වෙනස් විය හැකිය. ⚠️\n`;
-    message += `> ⚡ᴾᵒʷᵉʳᵉᵈ ᵇʸ ᴷⁱⁿᵍᴾᵒᵈᵈᵃᴹᵒᵈᶻ 𝙓 ᴵⁿᵒˢᵘᵏᵉ`;
-    
-    return message;
 }
 
-// 👇 COMMAND එක (ඕන වෙලාවක ගහලා බලන්න) 👇
+// 👇 COMMAND එක 👇
 cmd({
     pattern: "todayanime",
     alias: ["animetoday", "calendar"],
@@ -144,15 +136,10 @@ async (conn, mek, m, { from, reply }) => {
 
 // 👇 AUTO (හැම දවසකම රෑ 12:00 ට) 👇
 async function sendDailyAnimeCalendarAuto() {
-    if (!config.ANIME_NEWS || !config.ANIME_NEWS.TARGET_JIDS || config.ANIME_NEWS.TARGET_JIDS.length === 0) {
-        return;
-    }
+    if (!config.ANIME_NEWS || !config.ANIME_NEWS.TARGET_JIDS || config.ANIME_NEWS.TARGET_JIDS.length === 0) return;
     
     const sockets = Object.values(global.activeSockets || {});
-    if (sockets.length === 0) {
-        console.log('⏳ No active socket yet, skipping calendar.');
-        return;
-    }
+    if (sockets.length === 0) return;
     const sock = sockets[0];
 
     try {
@@ -176,4 +163,4 @@ cron.schedule('0 0 * * *', () => {
     timezone: "Asia/Colombo"
 });
 
-console.log('📅 Anime Calendar Loaded (Command: .todayanime | Auto: 00:00 AM | IPv4 Fix Enabled).');
+console.log('📅 Anime Calendar Loaded (AniList API | Command: .todayanime | Auto: 00:00 AM).');
