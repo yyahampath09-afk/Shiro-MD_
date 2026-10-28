@@ -1,21 +1,34 @@
-// plugins/anime-calendar.js — Daily Anime Release Calendar (Command + Auto + Image)
+// plugins/anime-calendar.js — Daily Anime Release Calendar (IPv4 Fix + Retry)
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const cron = require('node-cron');
 const config = require('../config');
 const { cmd } = require('../command');
 
-// යැවිය යුතු පින්තූරයේ URL එක
+// 👇 IPv4 force කරන axios instance එක (GitHub Actions IPv6 ප්‍රශ්නය විසඳීමට) 👇
+const ipv4Agent = {
+    httpAgent: new http.Agent({ family: 4 }),
+    httpsAgent: new https.Agent({ family: 4 }),
+    timeout: 20000 // තත්පර 20 timeout
+};
+const axiosIPv4 = axios.create(ipv4Agent);
+// 👆 -------------------------------------------------- 👆
+
 const CALENDAR_IMAGE_URL = 'https://files.catbox.moe/s39kdz.jpeg';
 
-// Anti-Ban සහිතව මැසේජ් යවන ශ්‍රිතය (පින්තූරය සමඟ)
 async function sendWithAntiBan(sock, jid, text, imageUrl = null, quoted = null) {
     try {
-        await sock.sendPresenceUpdate('composing', jid);
-        const typingTime = Math.min(5000, text.length * 20 + 1000);
-        await new Promise(r => setTimeout(r, typingTime));
-        await sock.sendPresenceUpdate('paused', jid);
-        await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
-        
+        if (!jid.endsWith('@newsletter')) {
+            await sock.sendPresenceUpdate('composing', jid);
+            const typingTime = Math.min(5000, text.length * 20 + 1000);
+            await new Promise(r => setTimeout(r, typingTime));
+            await sock.sendPresenceUpdate('paused', jid);
+            await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+        } else {
+            await new Promise(r => setTimeout(r, 1500));
+        }
+
         const messageContent = imageUrl 
             ? { image: { url: imageUrl }, caption: text } 
             : { text };
@@ -25,8 +38,6 @@ async function sendWithAntiBan(sock, jid, text, imageUrl = null, quoted = null) 
         console.log(`✅ Calendar sent → ${jid} ${imageUrl ? '(with image)' : ''}`);
     } catch (e) {
         console.error(`❌ Failed to send calendar to ${jid}:`, e.message);
-        
-        // පින්තූරය සමඟ ගැටලුවක් ඇත්නම්, පෙළ පමණක් යැවීමට උත්සාහ කරන්න
         if (imageUrl) {
             console.log('⚠️ Retrying without image...');
             try {
@@ -38,17 +49,34 @@ async function sendWithAntiBan(sock, jid, text, imageUrl = null, quoted = null) 
     }
 }
 
-// දිනපතා anime ලැයිස්තුව ලබාගෙන පෙළ සකස් කරන ශ්‍රිතය
 async function getDailyAnimeText() {
     const today = new Date();
     const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(); 
     const displayDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
     
-    const response = await axios.get(`https://api.jikan.moe/v4/schedules?filter=${dayName}&sfw=true`);
-    const animeList = response.data.data;
+    // 👇 Retry logic එක (3 වතාවක් උත්සාහ කරයි) 👇
+    let animeList = null;
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            console.log(`📡 Fetching Jikan API (Attempt ${attempt}/3)...`);
+            const response = await axiosIPv4.get(`https://api.jikan.moe/v4/schedules?filter=${dayName}&sfw=true`);
+            animeList = response.data.data;
+            break; // සාර්ථක නම් loop එකෙන් ඉවත් වෙනවා
+        } catch (e) {
+            lastError = e;
+            console.error(`❌ Attempt ${attempt} failed:`, e.message);
+            if (attempt < 3) {
+                // ඊළඟ උත්සාහයට කලින් තත්පර 2-4ක් ඉන්නවා
+                await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+            }
+        }
+    }
+    // 👆 -------------------------------------------------- 👆
 
     if (!animeList || animeList.length === 0) {
-        return `❌ අද දිනයට (${displayDay}) කිසිම anime එකක් හම්බුනේ නෑ.`;
+        return `❌ අද දිනයට (${displayDay}) කිසිම anime එකක් හම්බුනේ නෑ.\n\n_Error: ${lastError ? lastError.message : 'No data'}_`;
     }
 
     const maxAnime = 30;
@@ -103,9 +131,7 @@ cmd({
 async (conn, mek, m, { from, reply }) => {
     try {
         await reply("⏳ පොඩ්ඩක් ඉන්න, අද එන anime ලිස්ට් එක හොයාගන්නම්...");
-        
         const text = await getDailyAnimeText();
-        
         await conn.sendMessage(from, { 
             image: { url: CALENDAR_IMAGE_URL }, 
             caption: text 
@@ -150,4 +176,4 @@ cron.schedule('0 0 * * *', () => {
     timezone: "Asia/Colombo"
 });
 
-console.log('📅 Anime Calendar Loaded (Command: .todayanime | Auto: 00:00 AM | Image: Enabled).');
+console.log('📅 Anime Calendar Loaded (Command: .todayanime | Auto: 00:00 AM | IPv4 Fix Enabled).');
