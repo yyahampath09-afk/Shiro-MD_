@@ -17,7 +17,7 @@ const {
     jidNormalizedUser,
     generateForwardMessageContent,
     generateWAMessageFromContent
-} = require('@dnuzi/baileys'); // 👈 මෙතන තමයි වෙනස් කළේ
+} = require('@dnuzi/baileys'); // 👈 අලුත් ලයිබ්‍රරි එක
 
 const { getBuffer, getGroupAdmins, runtime } = require('./lib/functions');
 const { sms } = require('./lib/msg');
@@ -142,7 +142,6 @@ async function saveSession(sessionId, sessionPath) {
         }
 
         if (!hasChanges) {
-            console.log('No changes, skipping DB write:', sessionId);
             return;
         }
 
@@ -356,22 +355,36 @@ async function Pair(number, res = null) {
                     
                     const isGroup = from.endsWith('@g.us');
                     
-                    // LID ප්‍රශ්නය විසඳීම (Real Number එක ගැනීම)
+                    // 👇 LID හා Owner අඳුරගැනීමේ ලොජික් එක 👇
                     let sender = mek.key.fromMe
                         ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
                         : (mek.key.senderPn || mek.key.participant || mek.key.remoteJid);
                     
                     const senderNumber = sender.split('@')[0];
+                    const senderLid = mek.key.participant ? mek.key.participant.split('@')[0] : null;
                     const botNumber = sock.user.id.split(':')[0];
                     const botNumber2 = await jidNormalizedUser(sock.user.id);
                     const pushname = mek.pushName || 'User';
                     const isMe = botNumber.includes(senderNumber);
-                    const isOwner = isMe || (xnumber === senderNumber);
 
-                    // 👇 Sudo Check 👇
+                    // Owner Check (Config Number සහ LID දෙකම චෙක් කරයි)
+                    const configOwner = config.OWNER_NUMBER ? config.OWNER_NUMBER.replace(/[^0-9]/g, '') : '';
+                    const configOwnerLid = config.OWNER_LID ? config.OWNER_LID.replace(/[^0-9]/g, '') : '';
+                    
+                    const isOwner = isMe || 
+                                    (senderNumber === configOwner) || 
+                                    (senderNumber === configOwnerLid) ||
+                                    (senderLid === configOwner) ||
+                                    (senderLid === configOwnerLid) ||
+                                    (senderNumber === xnumber);
+
+                    // Sudo Check
                     let isSudo = false;
                     if (global.sudoList && Array.isArray(global.sudoList)) {
-                        isSudo = global.sudoList.some(jid => jid.split('@')[0] === senderNumber);
+                        isSudo = global.sudoList.some(jid => {
+                            const sNum = jid.split('@')[0];
+                            return sNum === senderNumber || (senderLid && sNum === senderLid);
+                        });
                     }
                     // 👆 -------------------------------------------------- 👆
 
@@ -382,7 +395,7 @@ async function Pair(number, res = null) {
                     let isBotAdmins = false;
                     let isAdmins = false;
 
-                    // Caching System for Group Metadata (Rate Limit එක නවත්තන්න)
+                    // Caching System for Group Metadata
                     if (isGroup) {
                         try {
                             const now = Date.now();
@@ -403,28 +416,25 @@ async function Pair(number, res = null) {
                             
                             const botNumber = sock.user.id.split(':')[0];
                             const botLid = sock.user.lid ? sock.user.lid.split(':')[0] : null;
-                            const senderLid = mek.key.participant;
-                            const senderPn = mek.key.senderPn;
+                            const senderLidGrp = mek.key.participant;
+                            const senderPnGrp = mek.key.senderPn;
 
-                            // 👇 Bot Admin ද කියලා බලනවා (LID සහ PN දෙකම චෙක් කරනවා) 👇
                             isBotAdmins = adminParticipants.some(p => {
                                 const pId = (p.id || '').split('@')[0];
                                 const pJid = (p.jid || '').split('@')[0];
                                 return pId === botNumber || pJid === botNumber || (botLid && (pId === botLid || pJid === botLid));
                             });
 
-                            // 👇 Sender Admin ද කියලා බලනවා (LID සහ PN දෙකම චෙක් කරනවා) 👇
                             isAdmins = adminParticipants.some(p => {
                                 const pId = (p.id || '').split('@')[0];
                                 const pJid = (p.jid || '').split('@')[0];
                                 
-                                const matchesSenderLid = (senderLid && (pId === senderLid.split('@')[0] || pJid === senderLid.split('@')[0]));
-                                const matchesSenderPn = (senderPn && (pId === senderPn.split('@')[0] || pJid === senderPn.split('@')[0]));
+                                const matchesSenderLid = (senderLidGrp && (pId === senderLidGrp.split('@')[0] || pJid === senderLidGrp.split('@')[0]));
+                                const matchesSenderPn = (senderPnGrp && (pId === senderPnGrp.split('@')[0] || pJid === senderPnGrp.split('@')[0]));
                                 
                                 return matchesSenderLid || matchesSenderPn;
                             });
                             
-                            // Fallback: අංකය වලින් වත් හරි යනවද බලනවා
                             if (!isAdmins && senderNumber) {
                                 isAdmins = adminParticipants.some(p => {
                                     const pId = (p.id || '').split('@')[0];
@@ -437,7 +447,7 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    // SHH AUTO DELETE LOGIC (LID සහ PN දෙකම චෙක් කරයි)
+                    // SHH AUTO DELETE LOGIC
                     if (isGroup && !isMe && isBotAdmins && global.shhList && global.shhList[from]) {
                         try {
                             const shhTargets = global.shhList[from];
@@ -460,7 +470,7 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    // 👇 Anti-Ban: Advanced Human-like reply (Typing + Random Delay + Read Delay) 👇
+                    // 👇 Anti-Ban: Advanced Human-like reply (Typing + Random Delay + Hidetag) 👇
                     const reply = async (teks) => {
                         try {
                             await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
@@ -483,26 +493,23 @@ async function Pair(number, res = null) {
                             await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
                         } catch (e) {}
                         
-                        // 👇 HIDETAG විදියට ඔයාට විතරක් notification එක යවනවා (tag එක පේන්නේ නෑ) 👇
+                        // HIDETAG විදියට ඔයාට විතරක් notification එක යවනවා (tag එක පේන්නේ නෑ)
                         return await sock.sendMessage(from, { 
-                            text: teks, // 👈 මෙතන @ ලකුණ අයින් කළා
-                            mentions: [sender] // 👈 ඒත් මෙතන ඔයාගේ අංකය තියෙනවා (notification එක යන්න)
+                            text: teks, 
+                            mentions: [sender] 
                         });
                     };
                     // 👆 -------------------------------------------------- 👆
 
-                    // 👇 Anti-Ban: Command Spamming නවත්තන්න 👇
+                    // Command Mode & Spam Check
                     if (isCmd) {
-                        // 👇 MODE CHECK (Private / Public) + SUDO CHECK 👇
                         if (config.MODE === 'private' && !isOwner && !isSudo) {
                             continue;
                         }
                         
-                        // 👇 OWNER ONLY COMMANDS CHECK 👇
                         if (config.OWNER_ONLY_COMMANDS && config.OWNER_ONLY_COMMANDS.includes(command) && !isOwner) {
                             continue; 
                         }
-                        // 👆 -------------------------------------------------- 👆
 
                         const now = Date.now();
                         const cooldown = userCooldowns.get(senderNumber) || 0;
