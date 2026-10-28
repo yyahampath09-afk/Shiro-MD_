@@ -1,5 +1,5 @@
 const { cmd } = require('../command');
-const { getAnti, setAnti, initializeAntiDeleteSettings } = require('../data/antidel');
+const { getAnti, setAnti, initializeAntiDeleteSettings } = require('../lib/antidel');
 const { downloadContentFromMessage } = require('@dnuzi/baileys');
 
 initializeAntiDeleteSettings();
