@@ -91,16 +91,18 @@ async function checkAnimeNews() {
             const snippet = cleanContent.slice(0, 4000);
             const hasMore = cleanContent.length > 4000;
 
-            // 👇 මෙතන backticks ( ` ) භාවිතා කරලා footer එක inline code block එකකට දාලා තියෙනවා 👇
-            const message =
-            
+            // 👇 Syntax error එක එන්නේ නැති වෙන්න String.fromCharCode පාවිච්චි කළා 👇
+            const backtick = String.fromCharCode(96); // මේකෙන් ` ලකුණ හැදෙනවා
+            const footer = `${backtick}ᴍɪᴢᴛʏ ᴀɴɪᴍᴇ©↠ADMIN_TEAM${backtick}`;
+
+            const message = 
 
 *${title}*
 
 ${snippet}${hasMore ? '...' : ''}
 
 
-\ > `ᴍɪᴢᴛʏ ᴀɴɪᴍᴇ©↠ADMIN_TEAM\``;
+${footer}`;
 
             for (const jid of config.ANIME_NEWS.TARGET_JIDS) {
                 await sendToJid(sock, jid, message);
