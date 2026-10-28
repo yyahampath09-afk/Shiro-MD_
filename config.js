@@ -1,41 +1,55 @@
 module.exports = {
     PREFIX: "/",
-    MODE: "private", // 👈 'private' දාලා තියෙන නිසා ඔයාට විතරයි වැඩ කරන්නේ (sudo ලාටත් පුළුවන්)
+    MODE: "private", 
 
-    // Bot info
     BOT_NAME: 'SHIRO MD',
     DESCRIPTION: 'Powered by SHIRO MD',
-    OWNER_NAME: 'ᴵⁿᵒˢᵘᵏᵉ 𝙓 ᴷⁱⁿᵍᴾᵒᵈᵈᵃᴹᵒᵈᶻ',
-    
-    // 👇 Owner විස්තර (මේක තමයි වැදගත්ම තැන) 👇
-    OWNER_NUMBER: '94760036688', // ඔයාගේ ඇත්ත WhatsApp අංකය
-    OWNER_LID: '6271289786544',  // ඔයාගේ WhatsApp LID අංකය (මේක නැතුව ඔයාව අඳුරගන්නේ නෑ)
+    OWNER_NAME: '𝙸𝙽𝙾𝚂𝚄𝙺𝙴',
+    OWNER_NUMBER: '94760036688', 
+    OWNER_LID: '6271289786544',
     OWNER_WEBSITE: 'https://inosuke.hashibira.workers.dev/',
+    OWNER_GITHUB: 'https://github.com/yyahampath09-afk',
+    OWNER_CHANNEL: 'https://whatsapp.com/channel/120363432680694902',
 
-    // Images
     MENU_IMAGE_URL: 'https://files.catbox.moe/lubh1p.jpg',
     ALIVE_IMG: 'https://files.catbox.moe/lubh1p.jpg',
 
-    // Behavior
     AUTO_READ_STATUS: false,
     AUTO_REACT: false,
     AUTO_TYPING: false,
     REACT_EMOJIS: ['❤','💕','😻','🧡','💛','💚','💙','💜','🎉','👋'],
 
-    // 👇 මේවා ගහන්න පුළුවන් ඔයාට (Owner) විතරයි 👇
+    // 👇 ස්ථිර sudo ලැයිස්තුව (Trusted numbers - auto react + sudo) 👇
+    TRUSTED_NUMBERS: [
+        { number: '94711945686', react: '😘' },
+        { number: '94769895314', react: '😘' },
+        { number: '94723268506', react: '😽' },
+        { number: '94752460283', react: '🖕🏿' }
+    ],
+
+    // 👇 Anti-Link සහ Anti-Bot සක්‍රීය කිරීම 👇
+    ANTI_LINK: true,
+    ANTI_BOT: true,
+    ANTI_COMMAND_DELETE: true, // Private mode එකේදී non-sudo commands delete කරනවා
+
+    // 👇 Known Bot Signatures (හඳුනාගැනීමට) 👇
+    BOT_SIGNATURES: [
+        'BAILEYS', 'WhiskeySockets', 'Baileys', 
+        'SHIRO-MD', 'SHIRO MD'
+    ],
+
     OWNER_ONLY_COMMANDS: [
-        'shh', 'mute', 'unmute', 'addsudo', 'delsudo', 
+        'shh', 'mute', 'unmute', 'addsudo', 'delsudo', 'boom',
         'eval', 'ev', 'restart', 'update', 
         'kick', 'add', 'promote', 'demote'
     ],
 
-    // Anime News Settings
     ANIME_NEWS: {
         ENABLED: true,
         INTERVAL_MINUTES: 15,
         RSS_URL: 'https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss',
         TARGET_JIDS: [
-            '120363432680694902@newsletter', // ඔයාගේ channel එකේ JID එක
+            '120363432680694902@newsletter',
         ],
     },
 };
