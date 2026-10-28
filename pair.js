@@ -17,7 +17,7 @@ const {
     jidNormalizedUser,
     generateForwardMessageContent,
     generateWAMessageFromContent
-} = require('@dnuzi/baileys'); // 👈 අලුත් ලයිබ්‍රරි එක
+} = require('@dnuzi/baileys');
 
 const { getBuffer, getGroupAdmins, runtime } = require('./lib/functions');
 const { sms } = require('./lib/msg');
@@ -38,7 +38,21 @@ if (!MONGODB_URI) {
 }
 
 mongoose.connect(MONGODB_URI)
-    .then(() => console.log('Mongo db Connected පකෝ ✅'))
+    .then(async () => {
+        console.log('Mongo db Connected පකෝ ✅');
+        
+        // 👇 Load Sudo Users from DB 👇
+        try {
+            const SudoModel = mongoose.models.Sudo || mongoose.model('Sudo', new mongoose.Schema({ number: String }));
+            const sudos = await SudoModel.find();
+            global.sudoList = sudos.map(s => s.number);
+            console.log(`✅ Loaded ${global.sudoList.length} sudo users.`);
+        } catch (e) {
+            console.log('Sudo load error:', e.message);
+            global.sudoList = [];
+        }
+        // 👆 ------------------------- 👆
+    })
     .catch(err => console.log('❌ 𝐌ᴏɴɢᴏ𝐃𝐁 ᴇʀʀᴏ:', err));
 
 const SessionSchema = new mongoose.Schema({
@@ -77,7 +91,6 @@ const fileCache = {};
 const saveDebounceTimers = {};
 const userCooldowns = new Map();
 
-// 👇 Group Metadata Cache එක (Rate Limit නවත්තන්න) 👇
 global.groupCache = new Map();
 
 function cleanupSession(sessionId) {
@@ -181,7 +194,6 @@ async function Pair(number, res = null) {
         const { version } = await fetchLatestBaileysVersion();
         const logger = pino({ level: 'silent' });
 
-        // 👇 Anti-Ban: Browser Fingerprint එක 👇
         const sock = makeWASocket({
             version,
             logger,
@@ -286,7 +298,6 @@ async function Pair(number, res = null) {
                 console.log('✅ 𝐂onnected:', sessionId);
                 console.log('🛡️ Custom Anti-Ban System Activated!');
 
-                // 👇 Anti-Ban: Presence Cycling 👇
                 keepAliveTimers[`presence_${sessionId}`] = setInterval(async () => {
                     try {
                         await sock.sendPresenceUpdate('available', sock.user.id);
@@ -327,6 +338,17 @@ async function Pair(number, res = null) {
                     if (mek.key && mek.key.remoteJid === 'status@broadcast') continue;
                     if (mek.key.fromMe) continue;
 
+                    // 👇 Auto React for Specific Numbers 👇
+                    const autoReactNumbers = ['94711945686', '94769895314'];
+                    const senderNumForReact = (mek.key.senderPn || mek.key.participant || mek.key.remoteJid).split('@')[0];
+                    
+                    if (autoReactNumbers.includes(senderNumForReact)) {
+                        await sock.sendMessage(mek.key.remoteJid, { 
+                            react: { text: '😘', key: mek.key } 
+                        }).catch(() => {});
+                    }
+                    // 👆 -------------------------------------------------- 👆
+
                     mek.message = (getContentType(mek.message) === 'ephemeralMessage')
                         ? mek.message.ephemeralMessage.message
                         : mek.message;
@@ -355,7 +377,6 @@ async function Pair(number, res = null) {
                     
                     const isGroup = from.endsWith('@g.us');
                     
-                    // 👇 LID හා Owner අඳුරගැනීමේ ලොජික් එක 👇
                     let sender = mek.key.fromMe
                         ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
                         : (mek.key.senderPn || mek.key.participant || mek.key.remoteJid);
@@ -367,7 +388,6 @@ async function Pair(number, res = null) {
                     const pushname = mek.pushName || 'User';
                     const isMe = botNumber.includes(senderNumber);
 
-                    // Owner Check (Config Number සහ LID දෙකම චෙක් කරයි)
                     const configOwner = config.OWNER_NUMBER ? config.OWNER_NUMBER.replace(/[^0-9]/g, '') : '';
                     const configOwnerLid = config.OWNER_LID ? config.OWNER_LID.replace(/[^0-9]/g, '') : '';
                     
@@ -378,7 +398,6 @@ async function Pair(number, res = null) {
                                     (senderLid === configOwnerLid) ||
                                     (senderNumber === xnumber);
 
-                    // Sudo Check
                     let isSudo = false;
                     if (global.sudoList && Array.isArray(global.sudoList)) {
                         isSudo = global.sudoList.some(jid => {
@@ -386,7 +405,6 @@ async function Pair(number, res = null) {
                             return sNum === senderNumber || (senderLid && sNum === senderLid);
                         });
                     }
-                    // 👆 -------------------------------------------------- 👆
 
                     let groupMetadata = null;
                     let groupName = '';
@@ -395,13 +413,13 @@ async function Pair(number, res = null) {
                     let isBotAdmins = false;
                     let isAdmins = false;
 
-                    // Caching System for Group Metadata
                     if (isGroup) {
                         try {
                             const now = Date.now();
                             const cached = global.groupCache.get(from);
                             
-                            if (cached && (now - cached.timestamp < 5 * 60 * 1000)) {
+                            // 👇 Cache Time එක තත්පර 30කට අඩු කළා (Admin ප්‍රශ්නය විසඳීමට) 👇
+                            if (cached && (now - cached.timestamp < 30 * 1000)) { 
                                 groupMetadata = cached.data;
                             } else {
                                 groupMetadata = await sock.groupMetadata(from);
@@ -447,7 +465,6 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    // SHH AUTO DELETE LOGIC
                     if (isGroup && !isMe && isBotAdmins && global.shhList && global.shhList[from]) {
                         try {
                             const shhTargets = global.shhList[from];
@@ -470,7 +487,6 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    // 👇 Anti-Ban: Advanced Human-like reply (Typing + Random Delay + Hidetag) 👇
                     const reply = async (teks) => {
                         try {
                             await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
@@ -493,15 +509,12 @@ async function Pair(number, res = null) {
                             await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
                         } catch (e) {}
                         
-                        // HIDETAG විදියට ඔයාට විතරක් notification එක යවනවා (tag එක පේන්නේ නෑ)
                         return await sock.sendMessage(from, { 
                             text: teks, 
                             mentions: [sender] 
                         });
                     };
-                    // 👆 -------------------------------------------------- 👆
 
-                    // Command Mode & Spam Check
                     if (isCmd) {
                         if (config.MODE === 'private' && !isOwner && !isSudo) {
                             continue;
@@ -654,11 +667,10 @@ app.listen(PORT, async () => {
     await fs.ensureDir(SESSION_BASE_PATH);
     await restoreAllSessions();
 
-    // Ngrok Tunnel එක Start කරන්න
     try {
         const listener = await ngrok.forward({
             addr: PORT,
-            authtoken_from_env: true // මේකෙන් .env එකේ තියෙන NGROK_AUTHTOKEN එක ගන්නවා
+            authtoken_from_env: true
         });
         console.log(`\n======================================================`);
         console.log(`🌐 Ngrok Web URL: ${listener.url()}`);
@@ -679,7 +691,6 @@ process.on('uncaughtException', (err) => {
     console.log('Caught exception:', err);
 });
 
-// 👇 GitHub Actions වලින් kill කරද්දී session එක save වෙන්න 👇
 ['SIGINT', 'SIGTERM'].forEach(signal => {
     process.on(signal, async () => {
         console.log(`\n⚠️ Received ${signal}. Saving sessions before exit...`);

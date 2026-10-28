@@ -1,25 +1,14 @@
 const { cmd } = require('../command');
-const fs = require('fs-extra');
-const path = require('path');
+const mongoose = require('mongoose');
 
-const SUDO_FILE = path.join(__dirname, '..', 'data', 'sudo.json');
+// 👇 MongoDB එකේ Sudo ලාව සේව් කරන්න Schema එකක් හදමු 👇
+const SudoSchema = new mongoose.Schema({
+    number: { type: String, required: true, unique: true }
+});
+const SudoModel = mongoose.models.Sudo || mongoose.model('Sudo', SudoSchema);
+// 👆 -------------------------------------------------- 👆
 
-// Load sudo list on startup
-if (fs.existsSync(SUDO_FILE)) {
-    try {
-        global.sudoList = fs.readJsonSync(SUDO_FILE);
-    } catch (e) {
-        global.sudoList = [];
-    }
-} else {
-    global.sudoList = [];
-    if (!fs.existsSync(path.dirname(SUDO_FILE))) {
-        fs.mkdirSync(path.dirname(SUDO_FILE), { recursive: true });
-    }
-    fs.writeJsonSync(SUDO_FILE, []);
-}
-
-// 👇 SUDO ADD COMMAND 👇
+// Sudo Add Command
 cmd({
     pattern: "addsudo",
     desc: "Add a user to sudo list (Owner only).",
@@ -40,13 +29,18 @@ async (conn, mek, m, { reply, isOwner }) => {
         const cleanNumber = targetJid.split('@')[0];
         const formattedJid = `${cleanNumber}@s.whatsapp.net`;
 
+        // MongoDB එකේ save කරනවා
+        await SudoModel.findOneAndUpdate(
+            { number: formattedJid }, 
+            { number: formattedJid }, 
+            { upsert: true }
+        );
+
         if (!global.sudoList.includes(formattedJid)) {
             global.sudoList.push(formattedJid);
-            await fs.writeJson(SUDO_FILE, global.sudoList, { spaces: 2 });
-            reply(`✅ @${cleanNumber} සාර්ථකව sudo ලැයිස්තුවට එකතු කළා. දැන් එයාට bot පාවිච්චි කරන්න පුළුවන්.`);
-        } else {
-            reply(`⚠️ @${cleanNumber} දැනටමත් sudo ලැයිස්තුවේ ඉන්නවා.`);
         }
+        
+        reply(`✅ @${cleanNumber} සාර්ථකව sudo ලැයිස්තුවට එකතු කළා. (Restart වුණත් ඉවත් වෙන්නේ නෑ)`);
 
     } catch (e) {
         console.log(e);
@@ -54,7 +48,7 @@ async (conn, mek, m, { reply, isOwner }) => {
     }
 });
 
-// 👇 SUDO DELETE COMMAND 👇
+// Sudo Delete Command
 cmd({
     pattern: "delsudo",
     desc: "Remove a user from sudo list (Owner only).",
@@ -73,9 +67,12 @@ async (conn, mek, m, { reply, isOwner }) => {
         if (!targetJid) return reply('❌ කරුණාකර කෙනෙක්ගේ මැසේජ් එකකට reply කරන්න හෝ tag කරන්න.');
 
         const cleanNumber = targetJid.split('@')[0];
+        const formattedJid = `${cleanNumber}@s.whatsapp.net`;
 
+        // MongoDB එකෙන් delete කරනවා
+        await SudoModel.deleteOne({ number: formattedJid });
+        
         global.sudoList = global.sudoList.filter(jid => jid.split('@')[0] !== cleanNumber);
-        await fs.writeJson(SUDO_FILE, global.sudoList, { spaces: 2 });
         reply(`✅ @${cleanNumber} sudo ලැයිස්තුවෙන් ඉවත් කළා.`);
 
     } catch (e) {
