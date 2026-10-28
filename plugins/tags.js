@@ -32,7 +32,7 @@ async (conn, mek, m, { from, isGroup, groupMetadata, reply, q }) => {
         if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
 
         const participants = groupMetadata.participants.map(p => p.id);
-        const text = q ? q : 'Attention Everyone!';
+        const text = q ? q : 'හුත්තෝ අවදානේ ඕනේ මට!';
 
         let message = `*📢 TAG ALL*\n\n*Message:* ${text}\n\n`;
         
@@ -61,11 +61,11 @@ cmd({
 },
 async (conn, mek, m, { from, isGroup, isAdmins, groupMetadata, reply, q }) => {
     try {
-        if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
-        if (!isAdmins) return reply('❌ මේක පාවිච්චි කරන්න admin කෙනෙක් වෙන්න ඕනේ.');
+        if (!isGroup) return reply('❌වේසාවෝ මේක group command එකක් ');
+        if (!isAdmins) return reply('❌ තෝ admin කෙනෙක් නෙවේ නේ. ඒ නිසා හැමිනියන්  ');
 
         const participants = groupMetadata.participants.map(p => p.id);
-        const text = q ? q : 'Attention Everyone!';
+        const text = q ? q : 'හුත්තෝ අවදානේ ඕනේ මට!';
 
         await conn.sendMessage(from, { 
             text: text, 
@@ -89,9 +89,9 @@ cmd({
 },
 async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, args }) => {
     try {
-        if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
-        if (!isAdmins) return reply('❌ මේක පාවිච්චි කරන්න admin කෙනෙක් වෙන්න ඕනේ.');
-        if (!isBotAdmins) return reply('❌ මට මේක කරන්න bot එක admin වෙන්න ඕනේ.');
+        if (!isGroup) return reply('❌ වේසාවෝ මේක group command එකක් ');
+        if (!isAdmins) return reply('❌ තෝ admin කෙනෙක් නෙවේ නේ. ඒ නිසා හැමිනියන්  ');
+        if (!isBotAdmins) return reply('❌ admin දියන් පකෝ');
 
         // 1. කෙනෙක්ව Tag කරලා හෝ Reply කරලා තියෙනවා නම් (User Auto-Delete)
         let targetJid = null;
@@ -114,12 +114,12 @@ async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, args }) => {
             await fs.writeJson(SHH_FILE, shhData, { spaces: 2 });
             global.shhList = shhData;
             
-            return reply(`🔇 *MUTED:* @${numOnly} ගේ මැසේජ් ඉබේම ඩිලීට් වේ.`);
+            return reply(`🔇 *කට වහපන් පකෝ* `);
         }
 
         // 2. කාවවත් tag කරලා නැත්නම් (Group Lock)
         await conn.groupSettingUpdate(from, 'announcement');
-        reply("🔒 *Group Locked!*\n\nදැන් ඉඳන් මේ ගෲප් එකේ මැසේජ් දාන්න පුළුවන් Admin ලට විතරයි.");
+        reply("🔒 *Group Locked!*");
 
     } catch (e) {
         console.log(e);
@@ -138,9 +138,9 @@ cmd({
 },
 async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, args }) => {
     try {
-        if (!isGroup) return reply('❌ මේක group එකක විතරයි පුළුවන්.');
-        if (!isAdmins) return reply('❌ මේක පාවිච්චි කරන්න admin කෙනෙක් වෙන්න ඕනේ.');
-        if (!isBotAdmins) return reply('❌ මට මේක කරන්න bot එක admin වෙන්න ඕනේ.');
+        if (!isGroup) return reply('❌ වේසාවෝ මේක group command එකක් ');
+        if (!isAdmins) return reply('❌ තෝ admin කෙනෙක් නෙවේ නේ. ඒ නිසා හැමිනියන්  .');
+        if (!isBotAdmins) return reply('❌ admin දියන් පකෝ ');
 
         // 1. කෙනෙක්ව Tag කරලා හෝ Reply කරලා තියෙනවා නම් (Stop User Auto-Delete)
         let targetJid = null;
@@ -161,12 +161,12 @@ async (conn, mek, m, { from, isGroup, isAdmins, isBotAdmins, reply, args }) => {
             await fs.writeJson(SHH_FILE, shhData, { spaces: 2 });
             global.shhList = shhData;
             
-            return reply(`🔊 *UNMUTED:* @${numOnly} ගේ මැසේජ් ඩිලීට් වීම නැවතුණා.`);
+            return reply(`🔊 *දැන් කතා කරපන් පකයා*`);
         }
 
         // 2. කාවවත් tag කරලා නැත්නම් (Group Unlock)
         await conn.groupSettingUpdate(from, 'not_announcement');
-        reply("🔓 *Group Unlocked!*\n\nදැන් ගෲප් එකේ හැමෝටම මැසේජ් දාන්න පුළුවන්.");
+        reply("🔓 *Group Unlocked!*.");
 
     } catch (e) {
         console.log(e);
