@@ -637,6 +637,4 @@ process.on('uncaughtException', (err) => {
         }
         process.exit(0);
     });
-});git add .
-git commit -m "Fixed menu not sending in groups due to newsletter forward and presence hang"
-git push origin main
+});
