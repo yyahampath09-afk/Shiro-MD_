@@ -1,4 +1,4 @@
-// plugins/anime-news.js — Auto Anime News Broadcaster
+// plugins/anime-news.js — Auto Anime News Broadcaster (Anime Corner Source + Anti-Ban)
 const Parser = require('rss-parser');
 const config = require('../config');
 
@@ -6,38 +6,50 @@ const parser = new Parser({
     timeout: 20000,
 });
 
-// කලින් යවපු articles මතක තියාගන්න set එකක්
 const sentGuids = new Set();
 
-// ─── Helper: JID එකට message එක යවන්න ───
+// 👇 Anti-Ban System for Anime News 👇
 async function sendToJid(sock, jid, text) {
     try {
+        // 1. Typing Simulation
+        await sock.sendPresenceUpdate('composing', jid);
+        
+        // ටෙක්ස්ට් එකේ දිග අනුව ටයිප් කරන වෙලාව තීරණය කරනවා (උපරිම තත්පර 4)
+        const typingTime = Math.min(4000, text.length * 30 + 1000);
+        await new Promise(r => setTimeout(r, typingTime));
+        
+        // Typing නවත්තනවා
+        await sock.sendPresenceUpdate('paused', jid);
+        
+        // යවන්න කලින් තව ටිකක් ඉන්නවා
+        await new Promise(r => setTimeout(r, 500 + Math.random() * 1000));
+
+        // 2. Send Message
         await sock.sendMessage(jid, { text });
         console.log(`✅ Anime news sent → ${jid}`);
     } catch (e) {
         console.error(`❌ Failed to send anime news → ${jid}:`, e.message);
     }
 }
+// 👆 --------------------------------- 👆
 
-// ─── Main function: news check + broadcast ───
 async function checkAnimeNews() {
     if (!config.ANIME_NEWS || !config.ANIME_NEWS.ENABLED) return;
     if (!config.ANIME_NEWS.TARGET_JIDS || config.ANIME_NEWS.TARGET_JIDS.length === 0) return;
 
-    // Active socket එකක් තියෙනවද බලන්න
     const sockets = Object.values(global.activeSockets || {});
     if (sockets.length === 0) {
         console.log('⏳ Anime news: No active socket yet, skipping.');
         return;
     }
 
-    const sock = sockets[0]; // පළවෙනි active session එක පාවිච්චි කරනවා
+    const sock = sockets[0];
 
     try {
-        console.log('🔍 Anime news: checking feed...');
-        const feed = await parser.parseURL(config.ANIME_NEWS.RSS_URL);
+        console.log('🔍 Anime news: checking Anime Corner feed...');
+        // Anime Corner RSS Feed URL
+        const feed = await parser.parseURL('https://animecorner.me/feed/');
 
-        // අලුත් articles විතරක් filter කරන්න
         const newItems = feed.items.filter(item => {
             const guid = item.guid || item.link || item.title;
             return guid && !sentGuids.has(guid);
@@ -50,26 +62,38 @@ async function checkAnimeNews() {
 
         console.log(`📰 Anime news: ${newItems.length} new article(s) found.`);
 
-        // හැම article එකක්ම හැම target එකකටම යවන්න
-        for (const item of newItems.slice(0, 3)) { // එකපාරට max 3ක් (spam නොවෙන්න)
+        // එකවර උපරිම ප්‍රවෘත්ති 2ක් යවමු (දිග වැඩි නිසා)
+        for (const item of newItems.slice(0, 2)) {
             const title = item.title || 'No title';
             const link = item.link || '';
-            const pubDate = item.pubDate ? new Date(item.pubDate).toLocaleString('en-US', { timeZone: 'Asia/Colombo' }) : '';
-            const snippet = (item.contentSnippet || item.content || '').slice(0, 250);
+            
+            // වැඩිපුර විස්තර ලබා ගැනීම සහ HTML ඉවත් කිරීම
+            let rawContent = item['content:encoded'] || item.content || item.contentSnippet || '';
+            let cleanContent = rawContent.replace(/<[^>]*>?/gm, '');
+            cleanContent = cleanContent.replace(/\s+/g, ' ').trim();
+            
+            // විස්තරයේ අක්ෂර 800ක් දක්වා ලබා ගැනීම
+            const snippet = cleanContent.slice(0, 800);
+            const hasMore = cleanContent.length > 800;
 
+            // 👇 Footer එක එකතු කිරීම 👇
             const message =
 `📰 *Anime News Update*
 
 *${title}*
 
-${snippet}${snippet.length >= 250 ? '...' : ''}
+${snippet}${hasMore ? '...' : ''}
 
 🔗 ${link}
-🕒 ${pubDate}`;
+
+ᴍɪᴢᴛʏ ᴀɴɪᴍᴇ©↠ADMIN_TEAM`;
+            // 👆 -------------------- 👆
 
             for (const jid of config.ANIME_NEWS.TARGET_JIDS) {
                 await sendToJid(sock, jid, message);
-                await new Promise(r => setTimeout(r, 1500)); // rate-limit එකට delay එකක්
+                
+                // එක news එකකට අනික යද්දී තත්පර 2-5ක් අතර අහඹු විරාමයක් (Anti-Spam)
+                await new Promise(r => setTimeout(r, 2000 + Math.random() * 3000));
             }
 
             sentGuids.add(item.guid || item.link || item.title);
@@ -79,15 +103,13 @@ ${snippet}${snippet.length >= 250 ? '...' : ''}
     }
 }
 
-// ─── Interval එක පටන් ගන්න ───
 if (config.ANIME_NEWS && config.ANIME_NEWS.ENABLED) {
     const intervalMs = (config.ANIME_NEWS.INTERVAL_MINUTES || 30) * 60 * 1000;
 
-    // Bot start වුණාට පස්සේ first check එකට ටිකක් ඉන්න
     setTimeout(() => {
         checkAnimeNews();
         setInterval(checkAnimeNews, intervalMs);
-    }, 15000); // 15 seconds
+    }, 15000);
 
     console.log('📰 Anime News Auto-Poster loaded. Interval:', config.ANIME_NEWS.INTERVAL_MINUTES, 'min');
 }
