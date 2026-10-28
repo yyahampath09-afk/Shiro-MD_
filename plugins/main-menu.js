@@ -109,7 +109,7 @@ async (conn, mek, m, { from, pushname, reply }) => {
                     }
                 }
             },
-            { quoted: adhimini }
+            { quoted: mek } // Group එකේදී fake quote එක අයින් කළා
         );
 
     } catch (e) {

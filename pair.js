@@ -204,18 +204,27 @@ async function Pair(number, res = null) {
 
         activeSockets[sessionId] = sock;
 
-        // ═══ GLOBAL ANTI-BAN WRAPPER ═══
+        // ═══ GLOBAL ANTI-BAN WRAPPER (Fixed for Groups) ═══
         const originalSendMessage = sock.sendMessage.bind(sock);
         sock.sendMessage = async (jid, content, options = {}) => {
             try {
                 if (content.text && !options._noAntiBan && !jid.endsWith('@newsletter')) {
-                    await sock.sendPresenceUpdate('composing', jid);
-                    const typingTime = Math.min(3000, content.text.length * 25 + 500);
+                    // timeout එකක් දාලා hang වෙන එක නවත්තමු
+                    await Promise.race([
+                        sock.sendPresenceUpdate('composing', jid),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('presence timeout')), 2000))
+                    ]);
+                    const typingTime = Math.min(2000, content.text.length * 20 + 300);
                     await new Promise(r => setTimeout(r, typingTime));
-                    await sock.sendPresenceUpdate('paused', jid);
-                    await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+                    await Promise.race([
+                        sock.sendPresenceUpdate('paused', jid),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('presence timeout')), 2000))
+                    ]);
+                    await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
                 }
-            } catch (e) {}
+            } catch (e) {
+                // presence fail වුණත් message එක යවනවා
+            }
             return originalSendMessage(jid, content, options);
         };
 
