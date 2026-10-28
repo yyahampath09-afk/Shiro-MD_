@@ -4,7 +4,7 @@ module.exports = {
 
     BOT_NAME: 'SHIRO MD',
     DESCRIPTION: 'Powered by SHIRO MD',
-    OWNER_NAME: '𝙸𝙽𝙾𝚂𝚄𝙺𝙴',
+    OWNER_NAME: 'ᴵⁿᵒˢᵘᵏᵉ 𝙓 ',
     OWNER_NUMBER: '94760036688', 
     OWNER_LID: '6271289786544',
     OWNER_WEBSITE: 'https://inosuke.hashibira.workers.dev/',
