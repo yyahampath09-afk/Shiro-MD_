@@ -42,14 +42,14 @@ async function getDailyAnimeText() {
     const today = new Date();
     const dayName = today.toLocaleDateString('en-US', { weekday: 'long' }); 
     
-    // 👇 අද දවසේ පටන් ගන්නා සහ ඉවර වන වෙලාව (ශ්‍රී ලංකා වේලාවෙන්) 👇
+    // අද දවසේ පටන් ගන්නා සහ ඉවර වන වෙලාව (ශ්‍රී ලංකා වේලාවෙන්)
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
     
     const startTs = Math.floor(startOfDay.getTime() / 1000);
     const endTs = Math.floor(endOfDay.getTime() / 1000);
 
-    // AniList GraphQL Query
+    // 👇 AniList GraphQL Query 👇
     const query = `
     query ($start: Int, $end: Int) {
       Page(page: 1, perPage: 50) {
@@ -67,7 +67,7 @@ async function getDailyAnimeText() {
     `;
 
     try {
-        console.log(`📡 Fetching AniList API...`);
+        console.log(`📡 Fetching AniList API...`); // 👈 ලොග් එකේ මේක පේන්න ඕනේ
         const response = await axios.post('https://graphql.anilist.co', {
             query: query,
             variables: { start: startTs, end: endTs }
@@ -79,7 +79,6 @@ async function getDailyAnimeText() {
             return `❌ අද දිනයට (${dayName}) කිසිම anime එකක් හම්බුනේ නෑ.`;
         }
 
-        // Format the message
         let message = `╭━━━〔 📺 TODAY ANIME 〕━━━╮\n`;
         message += `┃ 📅 Day: ${dayName}\n`;
         message += `┃ 🎬 Total: ${schedules.length}\n`;
