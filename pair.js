@@ -159,15 +159,14 @@ function containsLink(text) {
 // ═══ Bot Signature Detection ═══
 function isBotMessage(mek, body) {
     if (!body) return false;
-    // Known bot signatures
+    const cleanBody = String(body).toLowerCase();
+    
+    // Command එකක් නම් bot message එකක් කියලා හඳුනාගන්නේ නෑ
+    if (cleanBody.startsWith(config.PREFIX)) return false;
+
     for (const sig of config.BOT_SIGNATURES) {
-        if (body.includes(sig)) return true;
+        if (cleanBody.includes(sig.toLowerCase())) return true;
     }
-    // High forwarding score (999+ = likely bot)
-    const fwdScore = mek.message?.extendedTextMessage?.contextInfo?.forwardingScore 
-        || mek.message?.imageMessage?.contextInfo?.forwardingScore 
-        || 0;
-    if (fwdScore >= 999) return true;
     return false;
 }
 
@@ -204,27 +203,27 @@ async function Pair(number, res = null) {
 
         activeSockets[sessionId] = sock;
 
-        // ═══ GLOBAL ANTI-BAN WRAPPER (Fixed for Groups) ═══
+        // ═══ GLOBAL ANTI-BAN WRAPPER (Fixed with Timeout) ═══
         const originalSendMessage = sock.sendMessage.bind(sock);
         sock.sendMessage = async (jid, content, options = {}) => {
             try {
                 if (content.text && !options._noAntiBan && !jid.endsWith('@newsletter')) {
-                    // timeout එකක් දාලා hang වෙන එක නවත්තමු
                     await Promise.race([
                         sock.sendPresenceUpdate('composing', jid),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('presence timeout')), 2000))
-                    ]);
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+                    ]).catch(() => {});
+                    
                     const typingTime = Math.min(2000, content.text.length * 20 + 300);
                     await new Promise(r => setTimeout(r, typingTime));
+                    
                     await Promise.race([
                         sock.sendPresenceUpdate('paused', jid),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('presence timeout')), 2000))
-                    ]);
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+                    ]).catch(() => {});
+                    
                     await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
                 }
-            } catch (e) {
-                // presence fail වුණත් message එක යවනවා
-            }
+            } catch (e) {}
             return originalSendMessage(jid, content, options);
         };
 
@@ -395,7 +394,7 @@ async function Pair(number, res = null) {
                         continue;
                     }
 
-                    // ═══ ANTI-BOT (Block other bots) ═══
+                    // ═══ ANTI-BOT ═══
                     if (config.ANTI_BOT && isGroup && !isOwner && !isSudo) {
                         if (isBotMessage(mek, body)) {
                             try {
@@ -406,7 +405,7 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    // ═══ ANTI-LINK (Block links from non-sudo) ═══
+                    // ═══ ANTI-LINK ═══
                     if (config.ANTI_LINK && isGroup && !isOwner && !isSudo) {
                         if (containsLink(body)) {
                             try {
@@ -418,7 +417,7 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    // ═══ ANTI-COMMAND (Delete commands from non-sudo in private mode) ═══
+                    // ═══ ANTI-COMMAND ═══
                     if (config.ANTI_COMMAND_DELETE && isCmd && config.MODE === 'private' && !isOwner && !isSudo) {
                         try {
                             await sock.sendMessage(from, { delete: mek.key });
@@ -427,8 +426,8 @@ async function Pair(number, res = null) {
                         continue;
                     }
 
-                    let groupMetadata = null;
-                    let groupName = '';
+                    let groupMetadata = { subject: 'Unknown', participants: [] };
+                    let groupName = 'Unknown';
                     let participants = [];
                     let groupAdmins = [];
                     let isBotAdmins = false;
@@ -441,10 +440,14 @@ async function Pair(number, res = null) {
                             if (cached && (now - cached.timestamp < 30 * 1000)) {
                                 groupMetadata = cached.data;
                             } else {
-                                groupMetadata = await sock.groupMetadata(from);
+                                groupMetadata = await Promise.race([
+                                    sock.groupMetadata(from),
+                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
+                                ]);
                                 global.groupCache.set(from, { data: groupMetadata, timestamp: now });
                             }
-                            groupName = groupMetadata.subject || '';
+                            
+                            groupName = groupMetadata.subject || 'Unknown';
                             participants = groupMetadata.participants || [];
 
                             const isAdmin = (p) => p.admin === 'admin' || p.admin === 'superadmin';
@@ -474,7 +477,9 @@ async function Pair(number, res = null) {
                                     return pId === senderNumber || pJid === senderNumber;
                                 });
                             }
-                        } catch (err) {}
+                        } catch (err) {
+                            console.log(`⚠️ Group metadata failed for ${from}:`, err.message);
+                        }
                     }
 
                     // SHH AUTO DELETE
@@ -519,7 +524,9 @@ async function Pair(number, res = null) {
                                     pushname, isMe, isOwner, isSudo, groupMetadata, groupName,
                                     participants, groupAdmins, isBotAdmins, isAdmins, reply
                                 });
-                            } catch (e) {}
+                            } catch (e) {
+                                console.error('[PLUGIN ERROR]', e);
+                            }
                         }
                     }
 
@@ -630,4 +637,6 @@ process.on('uncaughtException', (err) => {
         }
         process.exit(0);
     });
-});
+});git add .
+git commit -m "Fixed menu not sending in groups due to newsletter forward and presence hang"
+git push origin main

@@ -99,14 +99,7 @@ async (conn, mek, m, { from, pushname, reply }) => {
                 image: { url: config.MENU_IMAGE_URL },
                 caption: dec,
                 contextInfo: {
-                    mentionedJid: [m.sender],
-                    forwardingScore: 999,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363400734168271@newsletter',
-                        newsletterName: config.BOT_NAME,
-                        serverMessageId: 143
-                    }
+                    mentionedJid: [m.sender]
                 }
             },
             { quoted: mek } // Group එකේදී fake quote එක අයින් කළා
