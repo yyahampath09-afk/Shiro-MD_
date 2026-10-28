@@ -5,7 +5,7 @@ module.exports = {
     // Bot info
     BOT_NAME: 'SHIRO MD',
     DESCRIPTION: 'Powered by SHIRO MD',
-    OWNER_NAME: '𝙸𝙽𝙾𝚂𝚄𝙺𝙴',
+    OWNER_NAME: 'ᴵⁿᵒˢᵘᵏᵉ 𝙓 ᴷⁱⁿᵍᴾᵒᵈᵈᵃᴹᵒᵈᶻ',
     
     // 👇 Owner විස්තර (මේක තමයි වැදගත්ම තැන) 👇
     OWNER_NUMBER: '94760036688', // ඔයාගේ ඇත්ත WhatsApp අංකය

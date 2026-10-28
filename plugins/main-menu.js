@@ -11,10 +11,9 @@ const adhimini = {
         participant: '13135550002@s.whatsapp.net' 
     }, 
     message: { 
-        imageMessage: { 
-            url: "https://files.catbox.moe/hkxmdh.jpg", // 👈 ඔයාට ඕන ෆොටෝ එකේ ලින්ක් එක මෙතන දාන්න
-            mimetype: "image/jpeg", 
-            caption: "Status" 
+        contactMessage: { 
+            displayName: '@𝓢𝓗𝓘𝓡𝓞_𝓜𝓓✨', 
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:Alip;;;;\nFN:Alip\nTEL;waid=13135550002:+1 313 555 0002\nEND:VCARD` 
         } 
     } 
 };
