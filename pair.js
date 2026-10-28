@@ -75,6 +75,7 @@ const keepAliveTimers = {};
 const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
+const userCooldowns = new Map(); // 👈 Anti-Spam සඳහා
 
 // 👇 Group Metadata Cache එක (Rate Limit නවත්තන්න) 👇
 global.groupCache = new Map();
@@ -83,6 +84,10 @@ function cleanupSession(sessionId) {
     if (keepAliveTimers[sessionId]) {
         clearInterval(keepAliveTimers[sessionId]);
         delete keepAliveTimers[sessionId];
+    }
+    if (keepAliveTimers[`presence_${sessionId}`]) {
+        clearInterval(keepAliveTimers[`presence_${sessionId}`]);
+        delete keepAliveTimers[`presence_${sessionId}`];
     }
     if (reconnectTimers[sessionId]) {
         clearTimeout(reconnectTimers[sessionId]);
@@ -177,8 +182,8 @@ async function Pair(number, res = null) {
         const { version } = await fetchLatestBaileysVersion();
         const logger = pino({ level: 'silent' });
 
-        // 1. මුලින්ම සාමාන්‍ය socket එක හදන්න
-        const rawSock = makeWASocket({
+        // 👇 Anti-Ban: Browser Fingerprint එක 👇
+        const sock = makeWASocket({
             version,
             logger,
             browser: ["Ubuntu", "Chrome", "110.0.5481.77"], 
@@ -194,21 +199,6 @@ async function Pair(number, res = null) {
             keepAliveIntervalMs: 30000,
             msgRetryCounterCache
         });
-
-        // 2. ඊට පස්සේ ඒක wrapSocket එකට දෙන්න
-        const sock = wrapSocket(rawSock, {
-            preset: 'conservative'
-        });
-
-        // 👇 baileys-antiban එකට අවශ්‍ය අඩුපාඩු පිරවීම (Monkey Patch) 👇
-        sock.wasp = sock.ev; 
-        sock.circuitBreaker = {
-            execute: async (fn) => await fn(),
-            fire: () => {},
-            success: () => {},
-            fail: () => {}
-        };
-        // 👆 -------------------------------------------------- 👆
 
         activeSockets[sessionId] = sock;
 
@@ -295,20 +285,17 @@ async function Pair(number, res = null) {
                 }
             } else if (connection === 'open') {
                 console.log('✅ 𝐂onnected:', sessionId);
+                console.log('🛡️ Custom Anti-Ban System Activated!');
 
-                // 👇 Anti-Ban: Human Entropy Service එක පටන් ගන්න 👇
-                try {
-                    const entropy = createHumanEntropyService(sock, sessionId, {
-                        enabled: true,
-                        minIntervalMs: 2 * 60 * 60 * 1000, // පැය 2ත් 6ත් අතර
-                        maxIntervalMs: 6 * 60 * 60 * 1000,
-                    });
-                    entropy.start();
-                    console.log('🧠 Human Entropy Service started (Anti-Ban)');
-                } catch (err) {
-                    console.log('⚠️ Human Entropy Service error:', err.message);
-                }
-                // 👆 -------------------------------------------------- 👆
+                // 👇 Anti-Ban: Presence Cycling 👇
+                keepAliveTimers[`presence_${sessionId}`] = setInterval(async () => {
+                    try {
+                        await sock.sendPresenceUpdate('available', sock.user.id);
+                        setTimeout(() => {
+                            sock.sendPresenceUpdate('unavailable', sock.user.id).catch(() => {});
+                        }, 20000 + Math.random() * 30000); 
+                    } catch (e) {}
+                }, 2 * 60 * 1000); 
 
                 keepAliveTimers[sessionId] = setInterval(async () => {
                     if (!activeSockets[sessionId]) {
@@ -380,6 +367,13 @@ async function Pair(number, res = null) {
                     const pushname = mek.pushName || 'User';
                     const isMe = botNumber.includes(senderNumber);
                     const isOwner = isMe || (xnumber === senderNumber);
+
+                    // 👇 Sudo Check 👇
+                    let isSudo = false;
+                    if (global.sudoList && Array.isArray(global.sudoList)) {
+                        isSudo = global.sudoList.some(jid => jid.split('@')[0] === senderNumber);
+                    }
+                    // 👆 -------------------------------------------------- 👆
 
                     let groupMetadata = null;
                     let groupName = '';
@@ -466,12 +460,55 @@ async function Pair(number, res = null) {
                         }
                     }
 
-                    const reply = async (teks) =>
-                        await sock.sendMessage(from, { text: teks }, { quoted: mek });
+                    // 👇 Anti-Ban: Advanced Human-like reply (Typing + Random Delay + Read Delay) 👇
+                    const reply = async (teks) => {
+                        try {
+                            await new Promise(r => setTimeout(r, 1000 + Math.random() * 2000));
+                            const totalTypingTime = Math.min(6000, teks.length * 50 + 1000);
+                            let timeSpent = 0;
 
-                    // Command එකක් නම් විතරක් Seen කරනවා
+                            while (timeSpent < totalTypingTime) {
+                                await sock.sendPresenceUpdate('composing', from);
+                                const burst = 1000 + Math.random() * 1500;
+                                await new Promise(r => setTimeout(r, burst));
+                                timeSpent += burst;
+                                if (timeSpent < totalTypingTime) {
+                                    await sock.sendPresenceUpdate('paused', from);
+                                    const pause = 500 + Math.random() * 1000;
+                                    await new Promise(r => setTimeout(r, pause));
+                                    timeSpent += pause;
+                                }
+                            }
+                            await sock.sendPresenceUpdate('paused', from);
+                            await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+                        } catch (e) {}
+                        return await sock.sendMessage(from, { text: teks }, { quoted: mek });
+                    };
+                    // 👆 -------------------------------------------------- 👆
+
+                    // 👇 Anti-Ban: Command Spamming නවත්තන්න 👇
                     if (isCmd) {
-                        await sock.readMessages([mek.key]);
+                        // 👇 MODE CHECK (Private / Public) + SUDO CHECK 👇
+                        if (config.MODE === 'private' && !isOwner && !isSudo) {
+                            continue;
+                        }
+                        
+                        // 👇 OWNER ONLY COMMANDS CHECK 👇
+                        if (config.OWNER_ONLY_COMMANDS && config.OWNER_ONLY_COMMANDS.includes(command) && !isOwner) {
+                            continue; 
+                        }
+                        // 👆 -------------------------------------------------- 👆
+
+                        const now = Date.now();
+                        const cooldown = userCooldowns.get(senderNumber) || 0;
+                        if (now - cooldown < 2000) {
+                            continue; 
+                        }
+                        userCooldowns.set(senderNumber, now);
+
+                        setTimeout(async () => {
+                            try { await sock.readMessages([mek.key]); } catch(e) {}
+                        }, 500 + Math.random() * 1000);
 
                         const cmd = commandMap.get(command);
                         if (cmd) {
@@ -480,7 +517,7 @@ async function Pair(number, res = null) {
                                 await cmd.function(sock, mek, m, {
                                     from, prefix, quoted: [], body, isCmd, command, args, q,
                                     isGroup, sender, senderNumber, botNumber2, botNumber,
-                                    pushname, isMe, isOwner, groupMetadata, groupName,
+                                    pushname, isMe, isOwner, isSudo, groupMetadata, groupName,
                                     participants, groupAdmins, isBotAdmins, isAdmins, reply
                                 });
                             } catch (e) {
@@ -493,7 +530,7 @@ async function Pair(number, res = null) {
                         try {
                             if (body && cmd.on === 'body') {
                                 await cmd.function(sock, mek, m, {
-                                    from, prefix, quoted: [], body, isSudo: false, isCmd,
+                                    from, prefix, quoted: [], body, isSudo, isCmd,
                                     command, args, q, isPre: false, isGroup, sender, senderNumber,
                                     botNumber2, botNumber, pushname, isMe, isOwner,
                                     groupMetadata, groupName, participants,
@@ -501,7 +538,7 @@ async function Pair(number, res = null) {
                                 });
                             } else if (mek.q && cmd.on === 'text') {
                                 await cmd.function(sock, mek, m, {
-                                    from, quoted: [], body, isSudo: false, isCmd, isPre: false,
+                                    from, quoted: [], body, isSudo, isCmd, isPre: false,
                                     command, args, q, isGroup, sender, senderNumber,
                                     botNumber2, botNumber, pushname, isMe, isOwner,
                                     groupMetadata, groupName, participants,
@@ -509,7 +546,7 @@ async function Pair(number, res = null) {
                                 });
                             } else if ((cmd.on === 'image' || cmd.on === 'photo') && mek.type === 'imageMessage') {
                                 await cmd.function(sock, mek, m, {
-                                    from, prefix, quoted: [], isSudo: false, body, isCmd,
+                                    from, prefix, quoted: [], isSudo, body, isCmd,
                                     command, isPre: false, args, q, isGroup, sender, senderNumber,
                                     botNumber2, botNumber, pushname, isMe, isOwner,
                                     groupMetadata, groupName, participants,
@@ -517,7 +554,7 @@ async function Pair(number, res = null) {
                                 });
                             } else if (cmd.on === 'sticker' && mek.type === 'stickerMessage') {
                                 await cmd.function(sock, mek, m, {
-                                    from, prefix, quoted: [], isSudo: false, body, isCmd,
+                                    from, prefix, quoted: [], isSudo, body, isCmd,
                                     command, args, isPre: false, q, isGroup, sender, senderNumber,
                                     botNumber2, botNumber, pushname, isMe, isOwner,
                                     groupMetadata, groupName, participants,
