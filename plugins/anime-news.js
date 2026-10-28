@@ -74,7 +74,7 @@ async function checkAnimeNews() {
             
             let content = item.contentSnippet || item.content || '';
             
-            // 👇 Feed එකේ කෙටි වෙලා තියෙනවා නම්, ලින්ක් එකට ගිහින් සම්පූර්ණ ටෙක්ස්ට් එක ගන්නවා 👇
+            // Feed එකේ කෙටි වෙලා තියෙනවා නම්, ලින්ක් එකට ගිහින් සම්පූර්ණ ටෙක්ස්ට් එක ගන්නවා
             if (content.includes('&hellip;') || content.includes('[...]') || content.length < 100) {
                 console.log(`🔗 Scraping full article: ${link}`);
                 const fullText = await getFullArticleText(link);
@@ -91,18 +91,16 @@ async function checkAnimeNews() {
             const snippet = cleanContent.slice(0, 4000);
             const hasMore = cleanContent.length > 4000;
 
-            // 👇 Syntax error එක එන්නේ නැති වෙන්න String.fromCharCode පාවිච්චි කළා 👇
-            const backtick = String.fromCharCode(96); // මේකෙන් ` ලකුණ හැදෙනවා
-            const footer = `${backtick}ᴍɪᴢᴛʏ ᴀɴɪᴍᴇ©↠ADMIN_TEAM${backtick}`;
+            // 👇 backticks නැතුව, සාමාන්‍ය + ලකුණෙන් මැසේජ් එක හදමු 👇
+            const backtick = String.fromCharCode(96);
+            const footer = backtick + "ᴍɪᴢᴛʏ ᴀɴɪᴍᴇ©↠ADMIN_TEAM" + backtick;
 
-            const message = 
-
-*${title}*
-
-${snippet}${hasMore ? '...' : ''}
-
-
-${footer}`;
+            let message
+            message += "*" + title + "*\n\n";
+            message += snippet + (hasMore ? '...' : '') + "\n\n";
+            message += "🔗 " + link + "\n\n";
+            message += footer;
+            // 👆 -------------------------------------------------- 👆
 
             for (const jid of config.ANIME_NEWS.TARGET_JIDS) {
                 await sendToJid(sock, jid, message);
