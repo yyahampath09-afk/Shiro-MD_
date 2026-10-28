@@ -71,7 +71,17 @@ async function getDailyAnimeText() {
         const response = await axios.post('https://graphql.anilist.co', {
             query: query,
             variables: { start: startTs, end: endTs }
-        }, { timeout: 15000 });
+        }, { 
+            timeout: 15000,
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            }
+        });
+        
+        // ඩේටා ආවද නැද්ද කියලා ලොග් එකේ පෙන්නන්න
+        console.log(`✅ AniList API Responded. Found ${response.data?.data?.Page?.airingSchedules?.length || 0} anime.`);
 
         const schedules = response.data.data.Page.airingSchedules;
 
