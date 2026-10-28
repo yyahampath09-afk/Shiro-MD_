@@ -17,7 +17,7 @@ const {
     jidNormalizedUser,
     generateForwardMessageContent,
     generateWAMessageFromContent
-} = require('@whiskeysockets/baileys');
+} = require('@dnuzi/baileys'); // 👈 මෙතන තමයි වෙනස් කළේ
 
 const { getBuffer, getGroupAdmins, runtime } = require('./lib/functions');
 const { sms } = require('./lib/msg');
@@ -75,7 +75,7 @@ const keepAliveTimers = {};
 const reconnectTimers = {};
 const fileCache = {};
 const saveDebounceTimers = {};
-const userCooldowns = new Map(); // 👈 Anti-Spam සඳහා
+const userCooldowns = new Map();
 
 // 👇 Group Metadata Cache එක (Rate Limit නවත්තන්න) 👇
 global.groupCache = new Map();
@@ -482,7 +482,12 @@ async function Pair(number, res = null) {
                             await sock.sendPresenceUpdate('paused', from);
                             await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
                         } catch (e) {}
-                        return await sock.sendMessage(from, { text: teks }, { quoted: mek });
+                        
+                        // 👇 HIDETAG විදියට ඔයාට විතරක් notification එක යවනවා (tag එක පේන්නේ නෑ) 👇
+                        return await sock.sendMessage(from, { 
+                            text: teks, // 👈 මෙතන @ ලකුණ අයින් කළා
+                            mentions: [sender] // 👈 ඒත් මෙතන ඔයාගේ අංකය තියෙනවා (notification එක යන්න)
+                        });
                     };
                     // 👆 -------------------------------------------------- 👆
 
