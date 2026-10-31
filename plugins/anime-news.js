@@ -13,7 +13,7 @@ const CFG = config.ANIME_NEWS || {};
 const FEED_URL      = 'https://animecorner.me/feed/';
 const MAX_PER_CHECK = 2;      // එක check එකකදී යවන උපරිම news ගණන
 const MAX_AGE_HOURS = 36;     // මීට පරණ news යවන්නේ නැහැ
-const POST_LATEST_ON_FIRST_RUN = false;   // true කළොත් පළවෙනි run එකේදීම අලුත්ම news යවනවා (test කරන්න)
+const POST_LATEST_ON_FIRST_RUN = true;   // true කළොත් පළවෙනි run එකේදීම අලුත්ම news යවනවා (test කරන්න)
 
 // 📢 "View channel" button — මේක config.js එකේ ANIME_NEWS ඇතුළේ දැම්මත් හරි, මෙතන quotes ඇතුළේ දැම්මත් හරි
 const VIEW_CHANNEL_JID  = CFG.VIEW_CHANNEL_JID  || '';              // උදා: '120363XXXXXXXXXXXXXX@newsletter'
