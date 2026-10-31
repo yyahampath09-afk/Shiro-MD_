@@ -43,13 +43,13 @@ module.exports = {
         'eval', 'ev', 'restart', 'update', 
         'kick', 'add', 'promote', 'demote'
     ],
-
-    ANIME_NEWS: {
-        ENABLED: true,
-        INTERVAL_MINUTES: 15,
-        RSS_URL: 'https://cr-news-api-service.prd.crunchyrollsvc.com/v1/en-US/rss',
-        TARGET_JIDS: [
-            '120363432680694902@newsletter',
-        ],
+        ANIME_NEWS: {
+    ENABLED: true,
+    TARGET_JIDS: [ /* ... */ '120363432680694902@newsletter' ],
+    INTERVAL_MINUTES: 15,
+    VIEW_CHANNEL_JID: '120363432680694902@newsletter',   // View channel button එක යන channel එක
+    VIEW_CHANNEL_NAME: 'ᴍɪᴢᴛʏ ᴀɴɪᴍᴇ',                       // (optional)
+    VIEW_CHANNEL_LINK: 'https://whatsapp.com/channel/0029VbE79hZBadmXSbahq33R'  // (optional) card එක tap කළාම යන තැන
+            }
     },
 };
