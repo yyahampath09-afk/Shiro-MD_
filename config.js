@@ -52,4 +52,3 @@ module.exports = {
     VIEW_CHANNEL_LINK: 'https://whatsapp.com/channel/0029VbE79hZBadmXSbahq33R'  // (optional) card එක tap කළාම යන තැන
             }
     },
-};
